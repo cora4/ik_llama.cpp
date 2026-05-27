@@ -1744,10 +1744,7 @@ static void mul_mat_iq3_k_r4_q8_k(int n, const void * vx, size_t bx, const DataI
     values = _mm256_add_epi8(values, _mm256_set1_epi8(64));
     static const uint8_t k_shuff[32] = {0, 1, 8, 9, 2, 3, 10, 11, 4, 5, 12, 13, 6, 7, 14, 15, 0, 1, 8, 9, 2, 3, 10, 11, 4, 5, 12, 13, 6, 7, 14, 15};
     auto shuff = _mm256_loadu_si256((const __m256i *)k_shuff);
-#ifndef HAVE_FANCY_SIMD
-    auto s_shuffle = _mm256_set_epi64x(0x0f0e0f0e0d0c0d0c, 0x0b0a0b0a09080908, 0x0706070605040504, 0x0302030201000100);
-#endif
-    int nbl = n / QK_K;
+    int nbl = n / QK_K_64;
     __m256  acc[nrc_y] = {};
     __m256i qx[4];
     uint64_t stored_scales[8];
@@ -1769,12 +1766,9 @@ static void mul_mat_iq3_k_r4_q8_k(int n, const void * vx, size_t bx, const DataI
             _mm256_storeu_si256((__m256i *)stored_scales+1, i8scales2);
             __m256i isum[nrc_y] = {};
             iq234_k_accum_mins(ibl, i8scales1, i8scales2, q8, shuff, isum, -64);
-            for (int ib = 0; ib < QK_K/32; ++ib) {
-#ifdef HAVE_FANCY_SIMD
+            for (int ib = 0; ib < QK_K_64/32; ++ib) {
                 auto scales = _mm256_cvtepi8_epi32(_mm_loadl_epi64((const __m128i *)(stored_scales + ib)));
-#else
-                auto scales = _mm256_shuffle_epi8(_mm256_cvtepi8_epi16(_mm_set1_epi64x(stored_scales[ib])), s_shuffle);
-#endif
+
                 auto lb = _mm256_loadu_si256((const __m256i *)iq3[ibl].qs+ib);
                 auto hbits = _mm_loadu_si128((const __m128i *)iq3[ibl].qh+ib);
                 auto hb = MM256_SET_M128I(hbits, _mm_slli_epi16(hbits, 4));
@@ -1790,21 +1784,13 @@ static void mul_mat_iq3_k_r4_q8_k(int n, const void * vx, size_t bx, const DataI
                 qx[3] = _mm256_shuffle_epi8(values, _mm256_add_epi8(qx[3], shift));
                 for (int iy = 0; iy < nrc_y; ++iy) {
                     auto y = _mm256_loadu_si256((const __m256i*)q8.y[iy][ibl].qs+ib);
-#ifdef HAVE_FANCY_SIMD
+
                     auto sumi = _mm256_setzero_si256();
                     sumi = _mm256_dpbusd_epi32(sumi, qx[0], _mm256_shuffle_epi32(y, 0x00));
                     sumi = _mm256_dpbusd_epi32(sumi, qx[1], _mm256_shuffle_epi32(y, 0x55));
                     sumi = _mm256_dpbusd_epi32(sumi, qx[2], _mm256_shuffle_epi32(y, 0xaa));
                     sumi = _mm256_dpbusd_epi32(sumi, qx[3], _mm256_shuffle_epi32(y, 0xff));
                     isum[iy] = _mm256_add_epi32(isum[iy], _mm256_mullo_epi32(scales, sumi));
-#else
-                    auto sumi1 = _mm256_maddubs_epi16(qx[0], _mm256_shuffle_epi32(y, 0x00));
-                    auto sumi2 = _mm256_maddubs_epi16(qx[1], _mm256_shuffle_epi32(y, 0x55));
-                    auto sumi3 = _mm256_maddubs_epi16(qx[2], _mm256_shuffle_epi32(y, 0xaa));
-                    auto sumi4 = _mm256_maddubs_epi16(qx[3], _mm256_shuffle_epi32(y, 0xff));
-                    isum[iy] = _mm256_add_epi32(isum[iy], _mm256_add_epi32(_mm256_madd_epi16(scales, sumi1), _mm256_madd_epi16(scales, sumi2)));
-                    isum[iy] = _mm256_add_epi32(isum[iy], _mm256_add_epi32(_mm256_madd_epi16(scales, sumi3), _mm256_madd_epi16(scales, sumi4)));
-#endif
                 }
             }
             for (int iy = 0; iy < nrc_y; ++iy) {

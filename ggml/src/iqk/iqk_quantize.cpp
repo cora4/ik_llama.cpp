@@ -2777,44 +2777,33 @@ size_t quantize_iq3_ks(const float * src, void * dst, int64_t nrows, int64_t n_p
 
 void dequantize_row_iq3_ks(const block_iq3_ks * x, float * y, int64_t k) {
     constexpr int kBlockSize = 32;
-    GGML_ASSERT(k%QK_K_64 == 0);
+    static_assert(QK_K_64 / kBlockSize == 2); // QK_K == 64
+    GGML_ASSERT(k % QK_K_64 == 0);
+
     const ggml_half * dptr = (const ggml_half *)x;
     float d = GGML_FP16_TO_FP32(*dptr);
     x = (const block_iq3_ks *)(dptr + 1);
 
-    // number of dl entries per QK_K_64 block
-    const int groups = QK_K_64 / kBlockSize; // e.g., 4 for QK_K_64=128, 2 for QK_K_64=64
-    float dl[ /* max groups expected; ensure large enough */ 8 ];
+    float dl[2];
     int nblock = k / QK_K_64;
 
     for (int ibl = 0; ibl < nblock; ++ibl) {
-        // build dl[] for this block
-        // scales[] has 4 bytes as before: each byte contains two 4-bit ls values,
-        // so it provides up to 8 ls values (works for groups <= 8)
-        for (int g = 0; g < groups; ++g) {
-            int scale_idx = g / 2;          // each scales[] entry holds two 4-bit values
+        // build dl for the 2 groups (each scales byte holds two 4-bit ls values)
+        for (int g = 0; g < 2; ++g) {
+            int scale_idx = g / 2;          // here scale_idx == 0
             int half = g % 2;               // 0 -> low 4 bits, 1 -> high 4 bits
             int ls = half ? (x[ibl].scales[scale_idx] >> 4) : (x[ibl].scales[scale_idx] & 0xF);
-            // extra bit per group is stored starting at bit 0 (same as original mapping)
-            ls |= (((x[ibl].extra >> g) & 1) << 4);
+            ls |= (((x[ibl].extra >> g) & 1) << 4); // extra bit per group as bit4
             dl[g] = d * (ls - 16);
         }
 
         auto qs = x[ibl].qs;
         auto qh = x[ibl].qh;
 
-        // For each group g, we need:
-        // - an iq3nl_values offset bit that (in original) was taken from extra >> (8 + group_index)
-        // - a qh bit indexed by group index used as the high bit of the 3-bit index
-        for (int g = 0; g < groups; ++g) {
+        // for each group produce kBlockSize dequantized floats
+        for (int g = 0; g < 2; ++g) {
             const int8_t * values = iq3nl_values + (((x[ibl].extra >> (8 + g)) & 1) << 3);
-            // for group g we choose which 2-bit pair from qs to use:
-            // original used ((qs[j] >> (2*ib)) & 3) with ib in 0..3 for 128 case.
-            // Here, qs contains kBlockSize entries of packed 2-bit indices for 'groups' groups.
-            // The packing layout per original implies the ib index within a 128-chunk maps to which 2-bit pair to use.
-            // For general groups <= 8, we assume the same packing: the 2-bit pairs for groups are sequential:
-            // pair_index = g (within 0..groups-1)
-            int pair_shift_base = 2 * g; // shift amount for extracting 2-bit index for this group
+            int pair_shift_base = 2 * g;
             for (int j = 0; j < kBlockSize; ++j) {
                 int low2 = (qs[j] >> pair_shift_base) & 3;
                 int high1 = (qh[j] >> g) & 1;
@@ -2826,22 +2815,55 @@ void dequantize_row_iq3_ks(const block_iq3_ks * x, float * y, int64_t k) {
     }
 }
 
-void  vec_dot_iq3_ks_q8_k(int n, float * s, size_t bs, const void * vx, size_t bx, const void * vy, size_t by, int nrc) {
+void vec_dot_iq3_ks_q8_k(int n, float * s, size_t bs, const void * vx, size_t bx, const void * vy, size_t by, int nrc) {
 #if GGML_USE_IQK_MULMAT
-    fprintf(stderr, "IQK_MULMAT for iq3_ks enabled, calling iqk_mul_mat...\n");
-    if (iqk_mul_mat(1, 1, n, GGML_TYPE_IQ3_KS, vx, 0, GGML_TYPE_Q8_K, vy, 0, s, 0, 0, 1)) {
-        return;
-    }
-    fprintf(stderr, "iqk_mul_mat for iq3_ks returned false, falling through to fallback\n");
-#else
-    fprintf(stderr, "IQK_MULMAT for iq3_ks not enabled at compile time\n");
+    if (iqk_mul_mat(1, 1, n, GGML_TYPE_IQ3_KS, vx, 0, GGML_TYPE_Q8_K, vy, 0, s, 0, 0, 1)) return;
 #endif
-    GGML_ASSERT(n%QK_K_64 == 0);
+    constexpr int kBlockSize = 32;
+    GGML_ASSERT(n % QK_K_64 == 0);
     GGML_ASSERT(nrc == 1);
-    GGML_UNUSED(bs);
-    GGML_UNUSED(bx);
-    GGML_UNUSED(by);
-    GGML_ABORT("Not implemented");
+    GGML_UNUSED(bs); GGML_UNUSED(bx); GGML_UNUSED(by);
+
+    const float * dptr = (const float *)vx;
+    const float d = *dptr;
+    const block_iq3_ks * x = (const block_iq3_ks *)(dptr + 1);
+    const block_q8_K    * y = (const block_q8_K    *)vy;
+
+    const int groups = QK_K_64 / kBlockSize; // usually 2
+    int nblock = n / QK_K_64;
+    float sumf = 0.0f;
+
+    for (int ibl = 0; ibl < nblock; ++ibl) {
+        const int8_t * qy = y[ibl].qs;
+        float db = d * y[ibl].d;
+
+        const uint8_t * qs = (const uint8_t *)x[ibl].qs;
+        const uint8_t * qh = (const uint8_t *)x[ibl].qh;
+
+        for (int g = 0; g < groups; ++g) {
+            int scale_idx = g / 2;
+            int half = g % 2;
+            int ls = half ? (x[ibl].scales[scale_idx] >> 4) : (x[ibl].scales[scale_idx] & 0xF);
+            ls |= (((x[ibl].extra >> g) & 1) << 4);
+            float dl = db * (ls - 16);
+
+            const int8_t * values = iq3nl_values + (((x[ibl].extra >> (8 + g)) & 1) << 3); // <<3 for 8-entry tables
+
+            int pair_shift_base = 2 * g;
+            int suml = 0;
+            for (int j = 0; j < kBlockSize; ++j) {
+                int low2 = (qs[j] >> pair_shift_base) & 3;
+                int high1 = (qh[j] >> g) & 1;
+                int idx = low2 | (high1 << 2); // 0..7
+                suml += qy[j] * values[idx];
+            }
+
+            sumf += dl * suml;
+            qy += kBlockSize;
+        }
+    }
+
+    *s = sumf;
 }
 
 //
