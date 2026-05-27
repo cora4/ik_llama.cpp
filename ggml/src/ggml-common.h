@@ -77,6 +77,7 @@ typedef sycl::half2 ggml_half2;
 // QK_K = super-block size
 
 #define QK_K 256
+#define QK_K_64 64
 #define K_SCALE_SIZE 12
 
 #if defined(GGML_COMMON_DECL_CUDA) || defined(GGML_COMMON_DECL_HIP) || defined(GGML_COMMON_DECL_SYCL)

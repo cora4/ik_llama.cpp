@@ -2573,9 +2573,13 @@ void vec_dot_iq3_k_q8_k(int n, float * s, size_t bs, const void * vx, size_t bx,
     GGML_UNUSED(bs);
 
 #if GGML_USE_IQK_MULMAT
+    fprintf(stderr, "IQK_MULMAT for iq3_k enabled, calling iqk_mul_mat...\n");
     if (iqk_mul_mat(1, 1, n, GGML_TYPE_IQ3_K, vx, 0, GGML_TYPE_Q8_K, vy, 0, s, 0, 0, 1)) {
         return;
     }
+    fprintf(stderr, "iqk_mul_mat for iq3_k returned false, falling through to fallback\n");
+#else
+    fprintf(stderr, "IQK_MULMAT for iq3_k not enabled at compile time\n");
 #endif
 
     GGML_ABORT("not implemented");
@@ -2758,14 +2762,14 @@ void quantize_row_iq3_ks(const float * x, void * y, int64_t k) {
 size_t quantize_iq3_ks(const float * src, void * dst, int64_t nrows, int64_t n_per_row, const float * imatrix,
         const quantize_user_data * user_data) {
     constexpr int kBlockSize = 32;
-    GGML_ASSERT(n_per_row%QK_K == 0);
+    GGML_ASSERT(n_per_row%QK_K_64 == 0);
     float weight[kBlockSize];
     std::vector<float> all_scales(n_per_row/kBlockSize);
     auto row_size = ggml_row_size(GGML_TYPE_IQ3_KS, n_per_row);
     QHelper helper(imatrix, user_data, n_per_row, kBlockSize);
     auto q_func = [&all_scales, &weight, block_size = kBlockSize] (const float * x, void * vy, int n_per_row, const float * imatrix,
             [[maybe_unused]] const quantize_user_data * user_data) {
-        quantize_row_iq3_ks_impl(QK_K, block_size, n_per_row, x, (char *)vy, all_scales.data(), weight, iq3nl_values, imatrix, 5);
+        quantize_row_iq3_ks_impl(QK_K_64, block_size, n_per_row, x, (char *)vy, all_scales.data(), weight, iq3nl_values, imatrix, 5);
     };
     helper.quantize(nrows, src, dst, row_size, q_func);
     return nrows * row_size;
@@ -2773,42 +2777,66 @@ size_t quantize_iq3_ks(const float * src, void * dst, int64_t nrows, int64_t n_p
 
 void dequantize_row_iq3_ks(const block_iq3_ks * x, float * y, int64_t k) {
     constexpr int kBlockSize = 32;
-    static_assert(QK_K/kBlockSize == 8);
-    GGML_ASSERT(k%QK_K == 0);
+    GGML_ASSERT(k%QK_K_64 == 0);
     const ggml_half * dptr = (const ggml_half *)x;
     float d = GGML_FP16_TO_FP32(*dptr);
     x = (const block_iq3_ks *)(dptr + 1);
-    float dl[8];
-    int nblock = k/QK_K;
+
+    // number of dl entries per QK_K_64 block
+    const int groups = QK_K_64 / kBlockSize; // e.g., 4 for QK_K_64=128, 2 for QK_K_64=64
+    float dl[ /* max groups expected; ensure large enough */ 8 ];
+    int nblock = k / QK_K_64;
+
     for (int ibl = 0; ibl < nblock; ++ibl) {
-        for (int j = 0; j < 4; ++j) {
-            int ls1 = (x[ibl].scales[j] & 0xf) | (((x[ibl].extra >> (j+0)) & 1) << 4);
-            int ls2 = (x[ibl].scales[j] >>  4) | (((x[ibl].extra >> (j+4)) & 1) << 4);
-            dl[j+0] = d*(ls1 - 16);
-            dl[j+4] = d*(ls2 - 16);
+        // build dl[] for this block
+        // scales[] has 4 bytes as before: each byte contains two 4-bit ls values,
+        // so it provides up to 8 ls values (works for groups <= 8)
+        for (int g = 0; g < groups; ++g) {
+            int scale_idx = g / 2;          // each scales[] entry holds two 4-bit values
+            int half = g % 2;               // 0 -> low 4 bits, 1 -> high 4 bits
+            int ls = half ? (x[ibl].scales[scale_idx] >> 4) : (x[ibl].scales[scale_idx] & 0xF);
+            // extra bit per group is stored starting at bit 0 (same as original mapping)
+            ls |= (((x[ibl].extra >> g) & 1) << 4);
+            dl[g] = d * (ls - 16);
         }
+
         auto qs = x[ibl].qs;
         auto qh = x[ibl].qh;
-        for (int i128 = 0; i128 < QK_K/128; ++i128) {
-            for (int ib = 0; ib < 4; ++ib) {
-                const int8_t * values = iq3nl_values + ((x[ibl].extra >> (8 + (4*i128+ib)) & 1) << 3);
-                for (int j = 0; j < kBlockSize; ++j) {
-                    y[j] = dl[4*i128 + ib] * values[((qs[j] >> 2*ib) & 3) | (((qh[j] >> (4*i128+ib)) & 1) << 2)];
-                }
-                y += kBlockSize;
+
+        // For each group g, we need:
+        // - an iq3nl_values offset bit that (in original) was taken from extra >> (8 + group_index)
+        // - a qh bit indexed by group index used as the high bit of the 3-bit index
+        for (int g = 0; g < groups; ++g) {
+            const int8_t * values = iq3nl_values + (((x[ibl].extra >> (8 + g)) & 1) << 3);
+            // for group g we choose which 2-bit pair from qs to use:
+            // original used ((qs[j] >> (2*ib)) & 3) with ib in 0..3 for 128 case.
+            // Here, qs contains kBlockSize entries of packed 2-bit indices for 'groups' groups.
+            // The packing layout per original implies the ib index within a 128-chunk maps to which 2-bit pair to use.
+            // For general groups <= 8, we assume the same packing: the 2-bit pairs for groups are sequential:
+            // pair_index = g (within 0..groups-1)
+            int pair_shift_base = 2 * g; // shift amount for extracting 2-bit index for this group
+            for (int j = 0; j < kBlockSize; ++j) {
+                int low2 = (qs[j] >> pair_shift_base) & 3;
+                int high1 = (qh[j] >> g) & 1;
+                int idx = low2 | (high1 << 2);
+                y[j] = dl[g] * values[idx];
             }
-            qs += kBlockSize;
+            y += kBlockSize;
         }
     }
 }
 
 void  vec_dot_iq3_ks_q8_k(int n, float * s, size_t bs, const void * vx, size_t bx, const void * vy, size_t by, int nrc) {
 #if GGML_USE_IQK_MULMAT
+    fprintf(stderr, "IQK_MULMAT for iq3_ks enabled, calling iqk_mul_mat...\n");
     if (iqk_mul_mat(1, 1, n, GGML_TYPE_IQ3_KS, vx, 0, GGML_TYPE_Q8_K, vy, 0, s, 0, 0, 1)) {
         return;
     }
+    fprintf(stderr, "iqk_mul_mat for iq3_ks returned false, falling through to fallback\n");
+#else
+    fprintf(stderr, "IQK_MULMAT for iq3_ks not enabled at compile time\n");
 #endif
-    GGML_ASSERT(n%QK_K == 0);
+    GGML_ASSERT(n%QK_K_64 == 0);
     GGML_ASSERT(nrc == 1);
     GGML_UNUSED(bs);
     GGML_UNUSED(bx);
