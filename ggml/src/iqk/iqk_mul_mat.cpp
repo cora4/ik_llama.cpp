@@ -630,36 +630,6 @@ extern "C" IQK_API bool iqk_mul_mat_4d(long Nx, long Ny, long ne00,
     auto r3 = ne13 / ne03;
 
     if (ne13 == 1 && Ny == 1 && r2 > 1) {
-        if (Nx >= 256 && Nx%32 == 0) {
-            int nx32 = Nx/32;
-            int nchunk = nx32*ne02;
-            if (r2 <= IQK_MAX_NY) {
-                MulMat mm;
-                if (!MulMat::prepare(typeA, typeB, ne00, mm, r2)) return false;
-                int ny = mm.funcs.size();
-                while (ny > 0 && !mm.funcs[ny-1]) --ny;
-                if (ny >= r2) {
-                    nchunk = nx32*ne02;
-                    for (int ichunk = ith; ichunk < nchunk; ichunk += nth) {
-                        int i02 = ichunk/nx32;
-                        int ix = 32*(ichunk - i02*nx32);
-                        DataInfo info{C + ix + r2*i02*nb2, (const char *)B + r2*i02*nb12, (size_t)nb2, (size_t)nb12, 0, 1, nullptr, 0};
-                        mm.funcs[r2-1](ne00, (const void *)((const char *)A + ix*strideA + i02*nb02), strideA, info, 32);
-                    }
-                    return true;
-                }
-            }
-            for (int ichunk = ith; ichunk < nchunk; ichunk += nth) {
-                int i02 = ichunk/nx32;
-                int ix = ichunk - i02*nx32;
-                if (!iqk_mul_mat(32, r2, ne00,
-                            typeA, (const char *)A + 32*ix*strideA + i02*nb02, strideA,
-                            typeB, (const char *)B + i02*r2*nb12, nb12,
-                            C + 32*ix + r2*i02*nb2, nb2, 0, 1)) return false;
-
-            }
-            return true;
-        }
         int gcd = simple_gcd(ne02, nth);
         int counter = 0;
         for (int64_t i12 = 0; i12 < ne02; i12++) {

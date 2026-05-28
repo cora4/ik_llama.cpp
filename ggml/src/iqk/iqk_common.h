@@ -506,6 +506,55 @@ struct Q2Bits {
     BlockPermuter perm;
 };
 
+struct Q2Bits64 {
+
+    static constexpr int NL = 2; // 64 → 2 × 32
+
+    alignas(64) __m512i values[NL];
+
+    const __m512i mask3 = _mm512_set1_epi8(7);
+
+    // NOTE: this is your IQ3 codebook (base + shifted)
+    __m512i lut_base;
+    __m512i lut_shifted;
+
+    inline void set_luts(__m512i base, __m512i shifted) {
+        lut_base = base;
+        lut_shifted = shifted;
+    }
+
+    inline void prepare(const uint8_t *qs, const uint8_t *qh) {
+
+        // load 32 bytes of qs (for 64 weights split into 2 lanes)
+        auto q = _mm512_loadu_si512((const __m512i*)qs);
+
+        // load qh (bitplane for MSB of index)
+        auto h = _mm256_loadu_si256((const __m256i*)qh);
+
+        auto h512 = _mm512_inserti32x8(
+            _mm512_castsi256_si512(h),
+            _mm256_srli_epi16(h, 1),
+            1
+        );
+
+        // --------------------------------------------------------
+        // build 3-bit IQ3 index
+        // --------------------------------------------------------
+
+        __m512i idx0 = _mm512_and_si512(q, _mm512_set1_epi8(3)); // qs
+        __m512i idx1 = _mm512_slli_epi16(h512, 2);               // qh << 2
+
+        __m512i idx = _mm512_or_si512(idx0, idx1);
+
+        // --------------------------------------------------------
+        // split into 2 SIMD lanes (32 + 32)
+        // --------------------------------------------------------
+
+        values[0] = _mm512_shuffle_epi8(lut_base, idx);
+        values[1] = _mm512_shuffle_epi8(lut_shifted, idx);
+    }
+};
+
 #else
 
 struct Q2Bits {
