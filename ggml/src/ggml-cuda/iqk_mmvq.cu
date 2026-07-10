@@ -8,6 +8,11 @@
 
 typedef float (*vec_dot_q_cuda_t)(const void * __restrict__ vbq, const block_q8_1 * __restrict__ bq8_1, const int & kbx, const int & iqs);
 
+//  Reminder:
+//    constexpr int qk  = ggml_cuda_type_traits<type>::qk;
+//    constexpr int qi  = ggml_cuda_type_traits<type>::qi;
+//    constexpr int vdr = get_vdr_mmvq(type);
+
 namespace {
 template <ggml_type type, int vdr, vec_dot_q_cuda_t vec_dot_q_cuda, int ncols_y>
 #if !(defined(GGML_USE_HIPBLAS) && defined(__HIP_PLATFORM_AMD__))
@@ -16,7 +21,7 @@ __launch_bounds__((ncols_y <= 4 ? 4 : 2)*WARP_SIZE, 1)
 #endif // !(defined(GGML_USE_HIPBLAS) && defined(__HIP_PLATFORM_AMD__))
 __global__ void iqk_mul_mat_vec_q(
     const void * __restrict__ vx, const void * __restrict__ vy, float * __restrict__ dst,
-    const int ncols_x, const int nrows_x, const int nrows_y, const int nrows_dst) {
+    const int ncols_x, const int nrows_x, const int nrows_y, const int nrows_dst, const int64_t row_size) {
 
     constexpr int qk  = ggml_cuda_type_traits<type>::qk;
     constexpr int qi  = ggml_cuda_type_traits<type>::qi;
@@ -50,7 +55,8 @@ __global__ void iqk_mul_mat_vec_q(
         for (int j = 0; j < ncols_y; ++j) {
 #pragma unroll
             for (int i = 0; i < rows_per_cuda_block; ++i) {
-                tmp[j][i] += vec_dot_q_cuda(vx, &y[j*blocks_per_col_y + kby], (row0 + i)*blocks_per_row_x + kbx, kqs);
+                tmp[j][i] += vec_dot_q_cuda((const void *)((const char *)vx + (row0 + i)*row_size),
+                    &y[j*blocks_per_col_y + kby], kbx, kqs);
             }
         }
     }
@@ -129,30 +135,32 @@ void iqk_mul_mat_vec_q_cuda(
     const dim3 block_nums(nblocks, 1, 1);
     const dim3 block_dims(WARP_SIZE, nwarps, 1);
 
+    const int64_t row_size = ggml_row_size(type, ncols_x);
+
     switch (ncols_y) {
         case 1:
-            iqk_mul_mat_vec_q<type, vdr, vec_dot_q_cuda, 1><<<block_nums, block_dims, 0, stream>>>(vx, vy, dst, ncols_x, nrows_x, nrows_y, nrows_dst);
+            iqk_mul_mat_vec_q<type, vdr, vec_dot_q_cuda, 1><<<block_nums, block_dims, 0, stream>>>(vx, vy, dst, ncols_x, nrows_x, nrows_y, nrows_dst, row_size);
             break;
         case 2:
-            iqk_mul_mat_vec_q<type, vdr, vec_dot_q_cuda, 2><<<block_nums, block_dims, 0, stream>>>(vx, vy, dst, ncols_x, nrows_x, nrows_y, nrows_dst);
+            iqk_mul_mat_vec_q<type, vdr, vec_dot_q_cuda, 2><<<block_nums, block_dims, 0, stream>>>(vx, vy, dst, ncols_x, nrows_x, nrows_y, nrows_dst, row_size);
             break;
         case 3:
-            iqk_mul_mat_vec_q<type, vdr, vec_dot_q_cuda, 3><<<block_nums, block_dims, 0, stream>>>(vx, vy, dst, ncols_x, nrows_x, nrows_y, nrows_dst);
+            iqk_mul_mat_vec_q<type, vdr, vec_dot_q_cuda, 3><<<block_nums, block_dims, 0, stream>>>(vx, vy, dst, ncols_x, nrows_x, nrows_y, nrows_dst, row_size);
             break;
         case 4:
-            iqk_mul_mat_vec_q<type, vdr, vec_dot_q_cuda, 4><<<block_nums, block_dims, 0, stream>>>(vx, vy, dst, ncols_x, nrows_x, nrows_y, nrows_dst);
+            iqk_mul_mat_vec_q<type, vdr, vec_dot_q_cuda, 4><<<block_nums, block_dims, 0, stream>>>(vx, vy, dst, ncols_x, nrows_x, nrows_y, nrows_dst, row_size);
             break;
         case 5:
-            iqk_mul_mat_vec_q<type, vdr, vec_dot_q_cuda, 5><<<block_nums, block_dims, 0, stream>>>(vx, vy, dst, ncols_x, nrows_x, nrows_y, nrows_dst);
+            iqk_mul_mat_vec_q<type, vdr, vec_dot_q_cuda, 5><<<block_nums, block_dims, 0, stream>>>(vx, vy, dst, ncols_x, nrows_x, nrows_y, nrows_dst, row_size);
             break;
         case 6:
-            iqk_mul_mat_vec_q<type, vdr, vec_dot_q_cuda, 6><<<block_nums, block_dims, 0, stream>>>(vx, vy, dst, ncols_x, nrows_x, nrows_y, nrows_dst);
+            iqk_mul_mat_vec_q<type, vdr, vec_dot_q_cuda, 6><<<block_nums, block_dims, 0, stream>>>(vx, vy, dst, ncols_x, nrows_x, nrows_y, nrows_dst, row_size);
             break;
         case 7:
-            iqk_mul_mat_vec_q<type, vdr, vec_dot_q_cuda, 7><<<block_nums, block_dims, 0, stream>>>(vx, vy, dst, ncols_x, nrows_x, nrows_y, nrows_dst);
+            iqk_mul_mat_vec_q<type, vdr, vec_dot_q_cuda, 7><<<block_nums, block_dims, 0, stream>>>(vx, vy, dst, ncols_x, nrows_x, nrows_y, nrows_dst, row_size);
             break;
         case 8:
-            iqk_mul_mat_vec_q<type, vdr, vec_dot_q_cuda, 8><<<block_nums, block_dims, 0, stream>>>(vx, vy, dst, ncols_x, nrows_x, nrows_y, nrows_dst);
+            iqk_mul_mat_vec_q<type, vdr, vec_dot_q_cuda, 8><<<block_nums, block_dims, 0, stream>>>(vx, vy, dst, ncols_x, nrows_x, nrows_y, nrows_dst, row_size);
             break;
         default:
             GGML_ASSERT(false);
@@ -204,6 +212,60 @@ __device__ __forceinline__ float vec_dot_iq4_k_q8_1(
     const int ls1 = ((bq4->scales_l[ib32] & 0xf) | ((sh << 4) & 0x30)) - 32;
     const int ls2 = ((bq4->scales_l[ib32] >>  4) | ((sh << 2) & 0x30)) - 32;
     return d * (sumi1 * ls1 + sumi2 * ls2);
+}
+
+#define VDR_IQ4_KS_Q8_1_MMVQ 4
+#define VDR_IQ4_KS_Q8_1_MMQ  4
+
+__device__ __forceinline__ float vec_dot_iq4_ks_q8_1(
+    const void * __restrict__ vbq, const block_q8_1 * __restrict__ bq8_1, const int & kbx, const int & iqs) {
+
+    float scale = *(const float *)vbq;
+    const block_iq4_ks * bq4 = (const block_iq4_ks *)((const char *)vbq + sizeof(float)) + kbx;
+    const uint8_t * all_values = (const uint8_t *)iq4k_values;
+
+    // iqs is 0...28
+    const int ib32 = iqs/4; // Why iqs/4 ?
+    const int32_t  * q8 = (const int *)bq8_1[ib32].qs;
+    const uint32_t * q4 = (const uint32_t *)bq4->qs + 4*ib32;
+    const float dl = scale * ((bq4->scales[ib32] & 254) - 127);
+    int v1, v2;
+    int sumi = 0;
+    for (int j = 0; j < 4; ++j) {
+        get_int_from_table_16_shift(q4[j], bq4->scales[ib32] & 1, all_values, v1, v2);
+        sumi = ggml_cuda_dp4a(v1, q8[j+0], sumi);
+        sumi = ggml_cuda_dp4a(v2, q8[j+4], sumi);
+    }
+    return dl * __low2float(bq8_1[ib32].ds) * sumi;
+}
+
+#define VDR_IQ4_KSS_Q8_1_MMVQ 4
+#define VDR_IQ4_KSS_Q8_1_MMQ  4
+
+__device__ __forceinline__ float vec_dot_iq4_kss_q8_1(
+    const void * __restrict__ vbq, const block_q8_1 * __restrict__ bq8_1, const int & kbx, const int & iqs) {
+
+    float scale = *(const float *)vbq;
+    const block_iq4_kss * bq4 = (const block_iq4_kss *)((const char *)vbq + sizeof(float)) + kbx;
+    const uint8_t * all_values = (const uint8_t *)iq4k_values;
+
+    // iqs is 0...28
+    const int ib32 = iqs/4; // Why iqs/4 ?
+    const int32_t  * q8 = (const int *)bq8_1[ib32].qs;
+    const uint32_t * q4 = (const uint32_t *)bq4->qs + 4*ib32;
+    uint32_t s32 = (q4[0] & 0x00010001) | ((q4[1] & 0x00010001) << 2) | ((q4[2] & 0x00010001) << 4) | ((q4[3] & 0x00010001) << 6);
+    uint8_t ls = (s32 | (s32 >> 15)) & 0xff;
+    const float dl = scale * ((ls & 254) - 127);
+    int v1, v2;
+    int sumi = 0;
+    for (int j = 0; j < 4; ++j) {
+        uint32_t aux32 = q4[j] & 0xfffefffe;
+        aux32 ^= (aux32 >> 1);
+        get_int_from_table_16_shift(aux32, ls & 1, all_values, v1, v2);
+        sumi = ggml_cuda_dp4a(v1, q8[j+0], sumi);
+        sumi = ggml_cuda_dp4a(v2, q8[j+4], sumi);
+    }
+    return dl * __low2float(bq8_1[ib32].ds) * sumi;
 }
 
 #define VDR_IQ5_K_Q8_1_MMVQ 4
@@ -391,7 +453,7 @@ __device__ __forceinline__ float vec_dot_iq2_k_q8_1(
     // -> scales_l[4*(i4/4) + k] >> 4*(((i4%4)/2)%2)
 
     const uint32_t * scales = (const uint32_t *)bq2->scales;
-    uint32_t s32 = __vsub4(((scales[i4/4] >> 4*(((i4%4)/2)%2)) & 0x0f0f0f0f) << 1, 0x0f0f0f0f);
+    uint32_t s32 = __vsub4((scales[i4/4] >> 4*(((i4%4)/2)%2)) & 0x0f0f0f0f, 0x08080808);
     const int8_t * s8 = (const int8_t *)&s32;
 
     aux32[0] = ((val1 >> 0) & 0x03030303); aux32[1] = ((val2 >> 0) & 0x03030303); values = all_values + ((extra & 0x01) << 8);
@@ -419,6 +481,65 @@ __device__ __forceinline__ float vec_dot_iq2_k_q8_1(
                                 +  __low2float(bq8_1[4*(i4/4)+2].ds) * sumi3
                                 +  __low2float(bq8_1[4*(i4/4)+3].ds) * sumi4);
 
+}
+
+#define VDR_IQ2_KS_Q8_1_MMVQ 4
+#define VDR_IQ2_KS_Q8_1_MMQ  4
+
+__device__ __forceinline__ float vec_dot_iq2_ks_q8_1(
+    const void * __restrict__ vbq, const block_q8_1 * __restrict__ bq8_1, const int & kbx, const int & iqs) {
+
+    float scale = *(const half *)vbq;
+    const block_iq2_ks * bq2 = (const block_iq2_ks *)((const char *)vbq + sizeof(half)) + kbx;
+
+    int i4 = iqs/4;  // 0...7. We will process q8 blocks 4*(i4/4), 4*(i4/4)+1, 4*(i4/4)+2, 4*(i4/4)+3
+    const int32_t  * q8_1 = (const int *)bq8_1[4*(i4/4)+0].qs + 2*(i4%4);
+    const int32_t  * q8_2 = (const int *)bq8_1[4*(i4/4)+1].qs + 2*(i4%4);
+    const int32_t  * q8_3 = (const int *)bq8_1[4*(i4/4)+2].qs + 2*(i4%4);
+    const int32_t  * q8_4 = (const int *)bq8_1[4*(i4/4)+3].qs + 2*(i4%4);
+
+    const uint16_t * q2 = (const uint16_t *)bq2->qs + 16*(i4/4) + 4*(i4%4);
+    const uint16_t extra = bq2->extra >> 4*(i4/4);
+
+    const int * all_values = (const int *)iq2k_table;
+    const int * values;
+
+    uint32_t val1 = q2[0] | (q2[1] << 16), val2 = q2[2] | (q2[3] << 16);
+
+    uint32_t aux32[2];
+    const uint8_t * a8 = (const uint8_t *)&aux32;
+    int v1, v2;
+
+    int8_t s8[4];
+    s8[0] = ((bq2->scales[2*(i4/4)+0] & 0xf) | ((extra >> 4) & 0x10)) - 16;
+    s8[1] = ((bq2->scales[2*(i4/4)+0] >>  4) | ((extra >> 5) & 0x10)) - 16;
+    s8[2] = ((bq2->scales[2*(i4/4)+1] & 0xf) | ((extra >> 6) & 0x10)) - 16;
+    s8[3] = ((bq2->scales[2*(i4/4)+1] >>  4) | ((extra >> 7) & 0x10)) - 16;
+
+    aux32[0] = ((val1 >> 0) & 0x03030303); aux32[1] = ((val2 >> 0) & 0x03030303); values = all_values + ((extra & 0x01) << 8);
+    v1 = int_from_table_4(a8 + 0, values);
+    v2 = int_from_table_4(a8 + 4, values);
+    int sumi1 = ggml_cuda_dp4a(v2, q8_1[1], ggml_cuda_dp4a(v1, q8_1[0], 0)) * s8[0];
+
+    aux32[0] = ((val1 >> 2) & 0x03030303); aux32[1] = ((val2 >> 2) & 0x03030303); values = all_values + ((extra & 0x02) << 7);
+    v1 = int_from_table_4(a8 + 0, values);
+    v2 = int_from_table_4(a8 + 4, values);
+    int sumi2 = ggml_cuda_dp4a(v2, q8_2[1], ggml_cuda_dp4a(v1, q8_2[0], 0)) * s8[1];
+
+    aux32[0] = ((val1 >> 4) & 0x03030303); aux32[1] = ((val2 >> 4) & 0x03030303); values = all_values + ((extra & 0x04) << 6);
+    v1 = int_from_table_4(a8 + 0, values);
+    v2 = int_from_table_4(a8 + 4, values);
+    int sumi3 = ggml_cuda_dp4a(v2, q8_3[1], ggml_cuda_dp4a(v1, q8_3[0], 0)) * s8[2];
+
+    aux32[0] = ((val1 >> 6) & 0x03030303); aux32[1] = ((val2 >> 6) & 0x03030303); values = all_values + ((extra & 0x08) << 5);
+    v1 = int_from_table_4(a8 + 0, values);
+    v2 = int_from_table_4(a8 + 4, values);
+    int sumi4 = ggml_cuda_dp4a(v2, q8_4[1], ggml_cuda_dp4a(v1, q8_4[0], 0)) * s8[3];
+
+    return scale * (__low2float(bq8_1[4*(i4/4)+0].ds) * sumi1
+                 +  __low2float(bq8_1[4*(i4/4)+1].ds) * sumi2
+                 +  __low2float(bq8_1[4*(i4/4)+2].ds) * sumi3
+                 +  __low2float(bq8_1[4*(i4/4)+3].ds) * sumi4);
 }
 
 #define VDR_IQ3_K_Q8_1_MMVQ 4
@@ -505,39 +626,104 @@ __device__ __forceinline__ float vec_dot_iq3_k_q8_1(
 
 }
 
-#define VDR_IQ2_TN_Q8_1_MMVQ 1
-#define VDR_IQ2_TN_Q8_1_MMQ  4
-
-static __device__ __forceinline__ float vec_dot_iq2_tn_q8_1(
+__device__ __forceinline__ float vec_dot_iq1_bn_q8_1(
     const void * __restrict__ vbq, const block_q8_1 * __restrict__ bq8_1, const int & kbx, const int & iqs) {
 
-    const block_iq2_tn * bq2 = (const block_iq2_tn *) vbq + kbx;
+    half d16; memcpy(&d16, vbq, sizeof(d16));
+    float scale = d16;
+    const block_iq1_bn * bq1 = (const block_iq1_bn *)((const char *)vbq + sizeof(d16)) + kbx;
 
-    const int bq8_offset = QR2_K * (iqs / QI8_1);
+    // iqs is 0 or 1
 
-    const uint16_t * q16 = (const uint16_t *)bq2->qs + 2*iqs;
-    int v = q16[0] | (q16[1] << 16);
-
-    float sumf = 0;
-    for (int i = 0; i < QR2_K; ++ i) {
-        int u = *((const int *)bq8_1[bq8_offset + i].qs + iqs % QI8_1);
-        float d8 = __low2float(bq8_1[bq8_offset + i].ds);
-        sumf += d8 * (ggml_cuda_dp4a(v & 0x03030303, u, 0) - ggml_cuda_dp4a(0x01010101, u, 0));
-        v >>= 2;
+    int sumi = 0;
+#if __CUDA_ARCH__ >= MIN_CC_DP4A // lowest compute capability for integer intrinsics
+    uint16_t mult[2];
+    mult[1] = iqs == 0 ? 27 : 3;
+    mult[0] = mult[1] + (mult[1] << 1);
+    const int * q8 = (const int *)bq8_1[iqs].qs;
+    int val[4];
+    for (int l = 0; l < 2; ++l) {
+        int8_t * a = (int8_t *)val;
+        const int i16 = 2*iqs + l;
+        for (int k = 0; k < 3; ++k) {
+            uint16_t q = bq1->ql[3*i16+k];
+            for (int j = 4; j >= 0; --j) {
+                uint16_t v = q & 0xff;
+                v += v << 1;
+                a[j] = v >> 8;
+                q += q << 1;
+            }
+            a += 5;
+        }
+        uint16_t v = (mult[l]*bq1->extra) & 0xff;
+        v += v << 1;
+        *a = v >> 8;
+        sumi = __dp4a(val[0], q8[4*l+0], __dp4a(val[1], q8[4*l+1], __dp4a(val[2], q8[4*l+2], __dp4a(val[3], q8[4*l+3], sumi))));
     }
-    return __half2float(bq2->d) * sumf;
+    float2 d8 = __half22float2(bq8_1[iqs].ds);
+    return scale * (d8.x * sumi - d8.y);
+#else
+    static const uint16_t k_mult[5] = {81, 27, 9, 3, 1};
+    const int8_t * q8 = bq8_1[iqs].qs;
+    for (int l = 0; l < 2; ++l) {
+        const int i16 = 2*iqs + l;
+        for (int k = 0; k < 3; ++k) {
+            uint8_t q = bq1->ql[3*i16+k];
+            for (int j = 0; j < 5; ++j) {
+                uint8_t v = k_mult[j]*q;
+                int8_t vs = (v + (v >> 1)) >> 7;
+                sumi += q8[j]*(vs - 1);
+            }
+            q8 += 5;
+        }
+        uint8_t v = k_mult[i16]*bq1->extra;
+        int8_t vs = (v + (v >> 1)) >> 7;
+        sumi += q8[0]*(vs - 1);
+        q8++;
+    }
+    return scale * __low2float(bq8_1[iqs].ds) * sumi;
+#endif
+}
 
-    //float sumf_d = 0;
-    //float sumf_m = 0;
-    //for (int i = 0; i < QR2_K; ++ i) {
-    //    int u = *((const int *)bq8_1[bq8_offset + i].qs + iqs % QI8_1);
-    //    float2 d8 = __half22float2(bq8_1[bq8_offset + i].ds);
-    //    sumf_d += d8.x * ggml_cuda_dp4a(v & 0x03030303, u, 0);
-    //    sumf_m += d8.y;
-    //    v >>= 2;
-    //}
-    //return __half2float(bq2->d) * (sumf_d - 0.125f * sumf_m);
+__device__ __forceinline__ float vec_dot_iq2_bn_q8_1(
+    const void * __restrict__ vbq, const block_q8_1 * __restrict__ bq8_1, const int & kbx, const int & iqs) {
 
+    float scale = *(const float *)vbq;
+    const block_iq2_bn * bq2 = (const block_iq2_bn *)((const char *)vbq + sizeof(float)) + kbx;
+
+    // iqs is 0 or 1
+
+#if __CUDA_ARCH__ >= MIN_CC_DP4A // lowest compute capability for integer intrinsics
+    auto qs  = (const int *)bq2->qs + 2*iqs;
+    auto q8l = (const int *)bq8_1[0].qs + 2*iqs;
+    auto q8h = (const int *)bq8_1[1].qs + 2*iqs;
+    int sumi1 = 0, sumi2 = 0, sumi3 = 0, sumi4 = 0;
+    for (int j = 0; j < 2; ++j) {
+        int vl = qs[j];
+        int vh = qs[j] >> 4;
+        sumi1 = __dp4a(vl & 0x03030303, q8l[j+0], sumi1);
+        sumi2 = __dp4a(vl & 0x0c0c0c0c, q8l[j+4], sumi2);
+        sumi3 = __dp4a(vh & 0x03030303, q8h[j+0], sumi3);
+        sumi4 = __dp4a(vh & 0x0c0c0c0c, q8h[j+4], sumi4);
+    }
+    auto d8l = __half22float2(bq8_1[0].ds);
+    auto d8h = __half22float2(bq8_1[1].ds);
+    return scale * (d8l.x * (sumi1 + 0.25f*sumi2) + d8h.x * (sumi3 + 0.25f * sumi4) - 0.5f*d8l.y - 0.5f*d8h.y);
+#else
+    int sumi1 = 0, sumi2 = 0, sumi3 = 0, sumi4 = 0;
+    auto q8l = bq8_1[0].qs + 8*iqs;
+    auto q8h = bq8_1[1].qs + 8*iqs;
+    auto qs  = bq2->qs + 8*iqs;
+    for (int j = 0; j < 8; ++j) {
+        sumi1 += q8l[j+ 0] * (qs[j] & 0x03);
+        sumi2 += q8l[j+16] * (qs[j] & 0x0c);
+        sumi3 += q8h[j+ 0] * (qs[j] & 0x30);
+        sumi4 += q8h[j+16] * (qs[j] & 0xc0);
+    }
+    auto d8l = __half22float2(bq8_1[0].ds);
+    auto d8h = __half22float2(bq8_1[1].ds);
+    return scale * (d8l.x * (sumi1 + 0.25f*sumi2) + 0.0625f * d8h.x*(sumi3 + 0.25f*sumi4) - 0.5f*d8l.y - 0.5f*d8h.y);
+#endif
 }
 
 } // namespace
@@ -563,6 +749,27 @@ void mul_mat_vec_iq4_k_q8_1_cuda(
     iqk_mul_mat_vec_q_cuda<GGML_TYPE_IQ4_K, VDR_IQ4_K_Q8_1_MMVQ, vec_dot_iq4_k_q8_1>(vx, vy, dst, ncols_x, nrows_x, nrows_y, ncols_y, nrows_dst, stream);
 }
 
+void mul_mat_vec_iq4_ks_q8_1_cuda(
+    const void * vx, const void * vy, float * dst,
+    const int ncols_x, const int nrows_x, const int nrows_y, const int ncols_y, const int nrows_dst, cudaStream_t stream) {
+
+    iqk_mul_mat_vec_q_cuda<GGML_TYPE_IQ4_KS, VDR_IQ4_KS_Q8_1_MMVQ, vec_dot_iq4_ks_q8_1>(vx, vy, dst, ncols_x, nrows_x, nrows_y, ncols_y, nrows_dst, stream);
+}
+
+void mul_mat_vec_iq4_kss_q8_1_cuda(
+    const void * vx, const void * vy, float * dst,
+    const int ncols_x, const int nrows_x, const int nrows_y, const int ncols_y, const int nrows_dst, cudaStream_t stream) {
+
+    iqk_mul_mat_vec_q_cuda<GGML_TYPE_IQ4_KSS, VDR_IQ4_KSS_Q8_1_MMVQ, vec_dot_iq4_kss_q8_1>(vx, vy, dst, ncols_x, nrows_x, nrows_y, ncols_y, nrows_dst, stream);
+}
+
+void mul_mat_vec_iq2_ks_q8_1_cuda(
+    const void * vx, const void * vy, float * dst,
+    const int ncols_x, const int nrows_x, const int nrows_y, const int ncols_y, const int nrows_dst, cudaStream_t stream) {
+
+    iqk_mul_mat_vec_q_cuda<GGML_TYPE_IQ2_KS, VDR_IQ2_KS_Q8_1_MMVQ, vec_dot_iq2_ks_q8_1>(vx, vy, dst, ncols_x, nrows_x, nrows_y, ncols_y, nrows_dst, stream);
+}
+
 void mul_mat_vec_iq5_k_q8_1_cuda(
     const void * vx, const void * vy, float * dst,
     const int ncols_x, const int nrows_x, const int nrows_y, const int ncols_y, const int nrows_dst, cudaStream_t stream) {
@@ -577,9 +784,14 @@ void mul_mat_vec_iq6_k_q8_1_cuda(
     iqk_mul_mat_vec_q_cuda<GGML_TYPE_IQ6_K, VDR_IQ6_K_Q8_1_MMVQ, vec_dot_iq6_k_q8_1>(vx, vy, dst, ncols_x, nrows_x, nrows_y, ncols_y, nrows_dst, stream);
 }
 
-void mul_mat_vec_iq2_tn_q8_1_cuda(
+void mul_mat_vec_iq1_bn_q8_1_cuda(
     const void * vx, const void * vy, float * dst,
     const int ncols_x, const int nrows_x, const int nrows_y, const int ncols_y, const int nrows_dst, cudaStream_t stream) {
+    iqk_mul_mat_vec_q_cuda<GGML_TYPE_IQ1_BN, 1, vec_dot_iq1_bn_q8_1>(vx, vy, dst, ncols_x, nrows_x, nrows_y, ncols_y, nrows_dst, stream);
+}
 
-    iqk_mul_mat_vec_q_cuda<GGML_TYPE_IQ2_TN, VDR_IQ2_TN_Q8_1_MMVQ, vec_dot_iq2_tn_q8_1>(vx, vy, dst, ncols_x, nrows_x, nrows_y, ncols_y, nrows_dst, stream);
+void mul_mat_vec_iq2_bn_q8_1_cuda(
+    const void * vx, const void * vy, float * dst,
+    const int ncols_x, const int nrows_x, const int nrows_y, const int ncols_y, const int nrows_dst, cudaStream_t stream) {
+    iqk_mul_mat_vec_q_cuda<GGML_TYPE_IQ2_BN, 1, vec_dot_iq2_bn_q8_1>(vx, vy, dst, ncols_x, nrows_x, nrows_y, ncols_y, nrows_dst, stream);
 }

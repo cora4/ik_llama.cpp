@@ -391,15 +391,55 @@ extern "C" {
         GGML_TYPE_Q4_0_4_4 = 31,
         GGML_TYPE_Q4_0_4_8 = 32,
         GGML_TYPE_Q4_0_8_8 = 33,
-        GGML_TYPE_IQ1_BN  = 34,
-        GGML_TYPE_IQ2_BN  = 35,
-        GGML_TYPE_Q8_K64  = 36,
-        GGML_TYPE_IQ2_K   = 37,
-        GGML_TYPE_IQ3_K   = 38,
-        GGML_TYPE_IQ4_K   = 39,
-        GGML_TYPE_IQ5_K   = 40,
-        GGML_TYPE_IQ6_K   = 41,
-        GGML_TYPE_IQ2_TN  = 42,
+        //
+        // So we are able to consume MS BitNet I2_S quants
+        //
+        GGML_TYPE_I2_S    = 36,
+        //
+        GGML_TYPE_Q8_0_X4 = 98,
+        GGML_TYPE_Q8_1_X4 = 99,
+        GGML_TYPE_Q6_0    = 133,
+        GGML_TYPE_IQ1_BN  = 134,
+        GGML_TYPE_IQ2_BN  = 135,
+        GGML_TYPE_Q8_K64  = 136,
+        GGML_TYPE_IQ2_K   = 137,
+        GGML_TYPE_IQ3_K   = 138,
+        GGML_TYPE_IQ4_K   = 139,
+        GGML_TYPE_IQ5_K   = 140,
+        GGML_TYPE_IQ6_K   = 141,
+        // depricated: GGML_TYPE_IQ2_TN  = 142,
+        // depricated: GGML_TYPE_IQ1_TN  = 143,
+        GGML_TYPE_IQ4_KS  = 144,
+        GGML_TYPE_IQ2_KS  = 145,
+        GGML_TYPE_IQ4_KSS = 146,
+        GGML_TYPE_Q8_K16  = 147,
+        GGML_TYPE_Q8_K32  = 148,
+        GGML_TYPE_Q8_KR8  = 149,
+
+        GGML_TYPE_Q4_0_R4   = 202,
+        GGML_TYPE_Q5_0_R4   = 206,
+        GGML_TYPE_Q8_0_R4   = 208,
+        GGML_TYPE_Q2_K_R4   = 210,
+        GGML_TYPE_Q3_K_R4   = 211,
+        GGML_TYPE_Q4_K_R4   = 212,
+        GGML_TYPE_Q5_K_R4   = 213,
+        GGML_TYPE_Q6_K_R4   = 214,
+        GGML_TYPE_IQ2_XXS_R4= 216,
+        GGML_TYPE_IQ2_XS_R4 = 217,
+        GGML_TYPE_IQ3_XXS_R4= 218,
+        GGML_TYPE_IQ4_NL_R4 = 220,
+        GGML_TYPE_IQ3_S_R4  = 221,
+        GGML_TYPE_IQ2_S_R4  = 222,
+        GGML_TYPE_IQ4_XS_R4 = 223,
+        GGML_TYPE_BF16_R16  = 230,
+        GGML_TYPE_Q6_0_R4   = 233,
+        GGML_TYPE_IQ2_BN_R4 = 335,
+        GGML_TYPE_IQ2_K_R4  = 337,
+        GGML_TYPE_IQ3_K_R4  = 338,
+        GGML_TYPE_IQ4_K_R4  = 339,
+        GGML_TYPE_IQ5_K_R4  = 340,
+        GGML_TYPE_IQ4_KS_R4 = 344,
+        GGML_TYPE_Q8_K_R8   = 399,
         GGML_TYPE_COUNT,
     };
 
@@ -444,14 +484,45 @@ extern "C" {
         GGML_FTYPE_MOSTLY_Q4_0_4_4 = 25, // except 1d tensors
         GGML_FTYPE_MOSTLY_Q4_0_4_8 = 26, // except 1d tensors
         GGML_FTYPE_MOSTLY_Q4_0_8_8 = 27, // except 1d tensors
-        GGML_FTYPE_MOSTLY_IQ1_BN  = 28, // except 1d tensors
-        GGML_FTYPE_MOSTLY_IQ2_BN  = 29, // except 1d tensors
-        GGML_FTYPE_MOSTLY_IQ2_K   = 30, // except 1d tensors
-        GGML_FTYPE_MOSTLY_IQ3_K   = 31, // except 1d tensors
-        GGML_FTYPE_MOSTLY_IQ4_K   = 32, // except 1d tensors
-        GGML_FTYPE_MOSTLY_IQ5_K   = 33, // except 1d tensors
-        GGML_FTYPE_MOSTLY_IQ6_K   = 34, // except 1d tensors
-        GGML_FTYPE_MOSTLY_IQ2_TN  = 35, // except 1d tensors
+        //
+        GGML_FTYPE_MOSTLY_Q6_0    = 127, // except 1d tensors
+        GGML_FTYPE_MOSTLY_IQ1_BN  = 128, // except 1d tensors
+        GGML_FTYPE_MOSTLY_IQ2_BN  = 129, // except 1d tensors
+        GGML_FTYPE_MOSTLY_IQ2_K   = 130, // except 1d tensors
+        GGML_FTYPE_MOSTLY_IQ3_K   = 131, // except 1d tensors
+        GGML_FTYPE_MOSTLY_IQ4_K   = 132, // except 1d tensors
+        GGML_FTYPE_MOSTLY_IQ5_K   = 133, // except 1d tensors
+        GGML_FTYPE_MOSTLY_IQ6_K   = 134, // except 1d tensors
+        // depricated: GGML_FTYPE_MOSTLY_IQ2_TN  = 135, // except 1d tensors
+        // depricated: GGML_FTYPE_MOSTLY_IQ1_TN  = 136, // except 1d tensors
+        GGML_FTYPE_MOSTLY_IQ4_KS  = 137, // except 1d tensors
+        GGML_FTYPE_MOSTLY_IQ2_KS  = 138, // except 1d tensors
+        GGML_FTYPE_MOSTLY_IQ4_KSS = 139, // except 1d tensors
+                                         //
+        GGML_FTYPE_MOSTLY_Q4_0_R4   = 202, // except 1d tensors
+        GGML_FTYPE_MOSTLY_Q8_0_R4   = 207, // except 1d tensors
+        GGML_FTYPE_MOSTLY_Q5_0_R4   = 208, // except 1d tensors
+        GGML_FTYPE_MOSTLY_Q2_K_R4   = 210, // except 1d tensors
+        GGML_FTYPE_MOSTLY_Q3_K_R4   = 211, // except 1d tensors
+        GGML_FTYPE_MOSTLY_Q4_K_R4   = 212, // except 1d tensors
+        GGML_FTYPE_MOSTLY_Q5_K_R4   = 213, // except 1d tensors
+        GGML_FTYPE_MOSTLY_Q6_K_R4   = 214, // except 1d tensors
+        GGML_FTYPE_MOSTLY_IQ2_XXS_R4= 215, // except 1d tensors
+        GGML_FTYPE_MOSTLY_IQ2_XS_R4 = 216, // except 1d tensors
+        GGML_FTYPE_MOSTLY_IQ3_XXS_R4= 217, // except 1d tensors
+        GGML_FTYPE_MOSTLY_IQ4_NL_R4 = 219, // except 1d tensors
+        GGML_FTYPE_MOSTLY_IQ3_S_R4  = 220, // except 1d tensors
+        GGML_FTYPE_MOSTLY_IQ2_S_R4  = 221, // except 1d tensors
+        GGML_FTYPE_MOSTLY_IQ4_XS_R4 = 222, // except 1d tensors
+        GGML_FTYPE_MOSTLY_BF16_R16  = 224, // except 1d tensors
+        GGML_FTYPE_MOSTLY_Q6_0_R4   = 227, // except 1d tensors
+        GGML_FTYPE_MOSTLY_IQ2_BN_R4 = 329, // except 1d tensors
+        GGML_FTYPE_MOSTLY_IQ2_K_R4  = 330, // except 1d tensors
+        GGML_FTYPE_MOSTLY_IQ3_K_R4  = 331, // except 1d tensors
+        GGML_FTYPE_MOSTLY_IQ4_K_R4  = 332, // except 1d tensors
+        GGML_FTYPE_MOSTLY_IQ5_K_R4  = 333, // except 1d tensors
+        GGML_FTYPE_MOSTLY_IQ4_KS_R4 = 337, // except 1d tensors
+        GGML_FTYPE_MOSTLY_Q8_K_R8   = 399, // except 1d tensors
     };
 
     // available tensor operations:
@@ -480,6 +551,9 @@ extern "C" {
         GGML_OP_RMS_NORM,
         GGML_OP_RMS_NORM_BACK,
         GGML_OP_GROUP_NORM,
+        GGML_OP_FUSED_RMS_NORM,
+        GGML_OP_FUSED_MUL_UNARY,
+        GGML_OP_MULTI_ADD,
 
         GGML_OP_MUL_MAT,
         GGML_OP_MUL_MAT_ID,
@@ -514,6 +588,8 @@ extern "C" {
         GGML_OP_TIMESTEP_EMBEDDING,
         GGML_OP_ARGSORT,
         GGML_OP_LEAKY_RELU,
+        GGML_OP_SOFTCAP,
+        GGML_OP_SOFT_CAP_MAX,
 
         GGML_OP_FLASH_ATTN_EXT,
         GGML_OP_FLASH_ATTN_BACK,
@@ -557,6 +633,7 @@ extern "C" {
         GGML_UNARY_OP_SILU,
         GGML_UNARY_OP_HARDSWISH,
         GGML_UNARY_OP_HARDSIGMOID,
+        GGML_UNARY_OP_SWIGLU,
 
         GGML_UNARY_OP_COUNT,
     };
@@ -643,6 +720,7 @@ extern "C" {
     // since https://github.com/ggerganov/ggml/issues/287
     struct ggml_cplan {
         size_t    work_size; // size of work buffer, calculated by `ggml_graph_plan()`
+        size_t    q_size;
         uint8_t * work_data; // work buffer, to be allocated by caller before calling to `ggml_graph_compute()`
 
         int n_threads;
@@ -737,6 +815,7 @@ extern "C" {
     GGML_API GGML_CALL size_t  ggml_nbytes      (const struct ggml_tensor * tensor);
     GGML_API           size_t  ggml_nbytes_pad  (const struct ggml_tensor * tensor); // same as ggml_nbytes() but padded to GGML_MEM_ALIGN
 
+    // TODO: remove the following from the public API to avoid unnecessary assumptions about data layout
     GGML_API GGML_CALL int64_t ggml_blck_size(enum ggml_type type);
     GGML_API GGML_CALL size_t  ggml_type_size(enum ggml_type type);             // size in bytes for all elements in a block
     GGML_API GGML_CALL size_t  ggml_row_size (enum ggml_type type, int64_t ne); // size in bytes for all elements in a row
@@ -748,6 +827,8 @@ extern "C" {
     GGML_API GGML_CALL const char * ggml_type_name(enum ggml_type type);
     GGML_API GGML_CALL const char * ggml_op_name  (enum ggml_op   op);
     GGML_API           const char * ggml_op_symbol(enum ggml_op   op);
+
+    GGML_API GGML_CALL bool ggml_is_noop(const struct ggml_tensor * tensor);
 
     GGML_API           const char * ggml_unary_op_name(enum ggml_unary_op op);
     GGML_API GGML_CALL const char * ggml_op_desc(const struct ggml_tensor * t); // unary or op name
@@ -909,6 +990,11 @@ extern "C" {
             struct ggml_tensor  * a,
             struct ggml_tensor  * b);
 
+    GGML_API struct ggml_tensor * ggml_multi_add(
+            struct ggml_context * ctx,
+            struct ggml_tensor  * a,
+            int n_experts);
+
     // dst = a
     // view(dst, nb1, nb2, nb3, offset) += b
     // return dst
@@ -949,6 +1035,18 @@ extern "C" {
             struct ggml_context * ctx,
             struct ggml_tensor  * a,
             struct ggml_tensor  * b);
+
+    GGML_API struct ggml_tensor * ggml_fused_mul_unary(
+            struct ggml_context * ctx,
+            struct ggml_tensor  * a,
+            struct ggml_tensor  * b,
+            enum ggml_unary_op    op);
+
+    GGML_API struct ggml_tensor * ggml_fused_mul_unary_inplace(
+            struct ggml_context * ctx,
+            struct ggml_tensor  * a,
+            struct ggml_tensor  * b,
+            enum ggml_unary_op    op);
 
     GGML_API struct ggml_tensor * ggml_div(
             struct ggml_context * ctx,
@@ -1117,6 +1215,10 @@ extern "C" {
             struct ggml_context * ctx,
             struct ggml_tensor  * a);
 
+    GGML_API struct ggml_tensor * ggml_swiglu(
+            struct ggml_context * ctx,
+            struct ggml_tensor  * a);
+
     // a - x
     // b - dy
     GGML_API struct ggml_tensor * ggml_silu_back(
@@ -1153,6 +1255,18 @@ extern "C" {
     GGML_API struct ggml_tensor * ggml_rms_norm_inplace(
             struct ggml_context * ctx,
             struct ggml_tensor  * a,
+            float                 eps);
+
+    GGML_API struct ggml_tensor * ggml_fused_rms_norm(
+            struct ggml_context * ctx,
+            struct ggml_tensor  * a,
+            struct ggml_tensor  * b,
+            float                 eps);
+
+    GGML_API struct ggml_tensor * ggml_fused_rms_norm_inplace(
+            struct ggml_context * ctx,
+            struct ggml_tensor  * a,
+            struct ggml_tensor  * b,
             float                 eps);
 
     // group normalize along ne0*ne1*n_groups
@@ -1220,6 +1334,38 @@ extern "C" {
             struct ggml_context * ctx,
             struct ggml_tensor  * a,
             float                 s);
+
+    GGML_API struct ggml_tensor * ggml_softcap(
+            struct ggml_context * ctx,
+            struct ggml_tensor  * a,
+            float                 s_before,
+            float                 s_after);
+
+    // in-place, returns view(a)
+    GGML_API struct ggml_tensor * ggml_softcap_inplace(
+            struct ggml_context * ctx,
+            struct ggml_tensor  * a,
+            float                 s_before,
+            float                 s_after);
+
+    GGML_API struct ggml_tensor * ggml_softcap_max(
+            struct ggml_context * ctx,
+            struct ggml_tensor  * a,
+            struct ggml_tensor  * mask,
+            float                 scale,
+            float                 max_bias,
+            float                 s_before,
+            float                 s_after);
+
+    // in-place, returns view(a)
+    GGML_API struct ggml_tensor * ggml_softcap_max_inplace(
+            struct ggml_context * ctx,
+            struct ggml_tensor  * a,
+            struct ggml_tensor  * mask,
+            float                 scale,
+            float                 max_bias,
+            float                 s_before,
+            float                 s_after);
 
     // b -> view(a,offset,nb1,nb2,3), return modified a
     GGML_API struct ggml_tensor * ggml_set(
@@ -1775,7 +1921,8 @@ extern "C" {
             struct ggml_tensor  * v,
             struct ggml_tensor  * mask,
             float                 scale,
-            float                 max_bias);
+            float                 max_bias,
+            float                 softcap);
 
     GGML_API void ggml_flash_attn_ext_set_prec(
             struct ggml_tensor * a,
@@ -2463,6 +2610,7 @@ extern "C" {
         int64_t                  ncols; // number of columns to process simultaneously
         ggml_gemv_t              gemv;
         ggml_gemm_t              gemm;
+        int64_t                  row_meta_size;
     } ggml_type_traits_t;
 
     GGML_API ggml_type_traits_t ggml_internal_get_type_traits(enum ggml_type type);

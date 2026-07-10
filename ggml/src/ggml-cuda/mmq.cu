@@ -8,8 +8,6 @@ void ggml_cuda_op_mul_mat_q(
 
     const int64_t ne00 = src0->ne[0];
 
-    const int64_t nb01 = src0->nb[1];
-
     const int64_t ne10 = src1->ne[0];
     const int64_t ne11 = src1->ne[1];
     GGML_ASSERT(ne10 % QK8_1 == 0);
@@ -17,7 +15,7 @@ void ggml_cuda_op_mul_mat_q(
     const int64_t ne0 = dst->ne[0];
 
     const int64_t row_diff = row_high - row_low;
-    const int64_t stride00 = nb01 / ggml_type_size(src0->type);
+    const int64_t stride00 = ne00 / ggml_blck_size(src0->type);
 
     int id = ggml_cuda_get_device();
     const int compute_capability = ggml_cuda_info().devices[id].cc;
@@ -40,6 +38,9 @@ void ggml_cuda_op_mul_mat_q(
             break;
         case GGML_TYPE_Q5_1:
             mul_mat_q_case<GGML_TYPE_Q5_1>(ctx, args, stream);
+            break;
+        case GGML_TYPE_Q6_0:
+            mul_mat_q_case<GGML_TYPE_Q6_0>(ctx, args, stream);
             break;
         case GGML_TYPE_Q8_0:
             mul_mat_q_case<GGML_TYPE_Q8_0>(ctx, args, stream);
@@ -105,6 +106,7 @@ bool ggml_cuda_should_use_mmq(enum ggml_type type, int cc, int64_t ne11) {
         case GGML_TYPE_Q4_1:
         case GGML_TYPE_Q5_0:
         case GGML_TYPE_Q5_1:
+        case GGML_TYPE_Q6_0:
         case GGML_TYPE_Q8_0:
         case GGML_TYPE_Q2_K:
         case GGML_TYPE_Q3_K:

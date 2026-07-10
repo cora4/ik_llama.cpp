@@ -246,11 +246,11 @@ endif
 # Compile flags
 #
 
-# keep standard at C11 and C++11
+# keep standard at C11 and C++17
 MK_CPPFLAGS  = -Iggml/include -Iggml/src -Iinclude -Isrc -Icommon
 MK_CFLAGS    = -std=c11   -fPIC
 MK_CXXFLAGS  = -std=c++17 -fPIC
-MK_NVCCFLAGS = -std=c++11
+MK_NVCCFLAGS = -std=c++17
 
 ifdef LLAMA_NO_CCACHE
 GGML_NO_CCACHE := 1
@@ -574,6 +574,7 @@ endif # GGML_NVPL
 
 OBJ_GGML    += ggml/src/iqk/iqk_quantize.o
 ifndef GGML_NO_IQKMULMAT
+	MK_CFLAGS   += -DGGML_USE_IQK_MULMAT
 	MK_CPPFLAGS += -DGGML_USE_IQK_MULMAT
 	OBJ_GGML    += ggml/src/iqk/iqk_mul_mat.o
 endif
@@ -597,6 +598,10 @@ else
 	OBJ_CUDA_TMPL += $(patsubst %.cu,%.o,$(wildcard ggml/src/ggml-cuda/template-instances/fattn-vec*q4_0-q4_0.cu))
 	OBJ_CUDA_TMPL += $(patsubst %.cu,%.o,$(wildcard ggml/src/ggml-cuda/template-instances/fattn-vec*q8_0-q8_0.cu))
 	OBJ_CUDA_TMPL += $(patsubst %.cu,%.o,$(wildcard ggml/src/ggml-cuda/template-instances/fattn-vec*f16-f16.cu))
+	OBJ_CUDA_TMPL += $(patsubst %.cu,%.o,$(wildcard ggml/src/ggml-cuda/template-instances/fattn-vec*q8_0-iq4_nl.cu))
+	OBJ_CUDA_TMPL += $(patsubst %.cu,%.o,$(wildcard ggml/src/ggml-cuda/template-instances/fattn-vec*:iq4_nl-iq4_nl.cu))
+	OBJ_CUDA_TMPL += $(patsubst %.cu,%.o,$(wildcard ggml/src/ggml-cuda/template-instances/fattn-vec*:q6_0-q5_0.cu))
+	OBJ_CUDA_TMPL += $(patsubst %.cu,%.o,$(wildcard ggml/src/ggml-cuda/template-instances/fattn-vec*:q8_0-q6_0.cu))
 endif # GGML_CUDA_FA_ALL_QUANTS
 
 ifdef GGML_CUDA
@@ -1228,6 +1233,7 @@ clean:
 	rm -rvf ggml/*.so
 	rm -vrf ggml/src/*.o
 	rm -rvf ggml/src/llamafile/*.o
+	rm -rvf ggml/src/iqk/*.o
 	rm -rvf common/build-info.cpp
 	rm -vrf ggml/src/ggml-metal-embed.metal
 	rm -vrf ggml/src/ggml-cuda/*.o

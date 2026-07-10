@@ -13,7 +13,7 @@
 typedef uint16_t ggml_half;
 typedef uint32_t ggml_half2;
 
-#define GGML_COMMON_AGGR
+#define GGML_SCALE_TYPE1(m, dm) ggml_half d; ggml_half m
 
 #define GGML_COMMON_DECL
 #elif defined(GGML_COMMON_DECL_METAL)
@@ -22,7 +22,7 @@ typedef uint32_t ggml_half2;
 typedef half  ggml_half;
 typedef half2 ggml_half2;
 
-#define GGML_COMMON_AGGR
+#define GGML_SCALE_TYPE1(m, dm) union { struct { ggml_half d; ggml_half m; }; ggml_half2 dm; }
 
 #define GGML_COMMON_DECL
 #elif defined(GGML_COMMON_DECL_CUDA)
@@ -36,7 +36,7 @@ typedef half2 ggml_half2;
 typedef half  ggml_half;
 typedef half2 ggml_half2;
 
-#define GGML_COMMON_AGGR data
+#define GGML_SCALE_TYPE1(m, dm) union { struct { ggml_half d; ggml_half m; } data; ggml_half2 dm; }
 
 #define GGML_COMMON_DECL
 #elif defined(GGML_COMMON_DECL_HIP)
@@ -46,7 +46,7 @@ typedef half2 ggml_half2;
 typedef half  ggml_half;
 typedef half2 ggml_half2;
 
-#define GGML_COMMON_AGGR data
+#define GGML_SCALE_TYPE1(m, dm) union { struct { ggml_half d; ggml_half m; } data; ggml_half2 dm; }
 
 #define GGML_COMMON_DECL
 #elif defined(GGML_COMMON_DECL_SYCL)
@@ -56,7 +56,7 @@ typedef half2 ggml_half2;
 typedef sycl::half  ggml_half;
 typedef sycl::half2 ggml_half2;
 
-#define GGML_COMMON_AGGR data
+#define GGML_SCALE_TYPE1(m, dm) union { struct { ggml_half d; ggml_half m; } data; ggml_half2 dm; }
 
 #define GGML_COMMON_DECL
 #endif
@@ -94,6 +94,9 @@ typedef sycl::half2 ggml_half2;
 
 #define QI5_1 (QK5_1 / (4 * QR5_1))
 #define QR5_1 2
+
+#define QI6_0 (QK6_0 / (4 * QR6_0))
+#define QR6_0 2
 
 #define QI8_0 (QK8_0 / (4 * QR8_0))
 #define QR8_0 1
@@ -166,13 +169,7 @@ static_assert(sizeof(block_q4_0) == sizeof(ggml_half) + QK4_0 / 2, "wrong q4_0 b
 
 #define QK4_1 32
 typedef struct {
-    union {
-        struct {
-            ggml_half d; // delta
-            ggml_half m; // min
-        } GGML_COMMON_AGGR;
-        ggml_half2 dm;
-    };
+    GGML_SCALE_TYPE1(m, dm);
     uint8_t qs[QK4_1 / 2]; // nibbles / quants
 } block_q4_1;
 static_assert(sizeof(block_q4_1) == 2 * sizeof(ggml_half) + QK4_1 / 2, "wrong q4_1 block size/padding");
@@ -185,19 +182,35 @@ typedef struct {
 } block_q5_0;
 static_assert(sizeof(block_q5_0) == sizeof(ggml_half) + sizeof(uint32_t) + QK5_0 / 2, "wrong q5_0 block size/padding");
 
+typedef struct {
+    ggml_half d[4];        // delta
+    uint8_t qh[QK5_0/2];   // 5-th bit of quants
+    uint8_t qs[QK5_0*2];   // nibbles / quants
+} block_q5_0_r4;
+static_assert(sizeof(block_q5_0_r4) == 4*sizeof(ggml_half) + QK5_0*2 + QK5_0/2, "wrong q5_0_r4 block size/padding");
+
 #define QK5_1 32
 typedef struct {
-    union {
-        struct {
-            ggml_half d; // delta
-            ggml_half m; // min
-        } GGML_COMMON_AGGR;
-        ggml_half2 dm;
-    };
+    GGML_SCALE_TYPE1(m, dm);
     uint8_t qh[4];         // 5-th bit of quants
     uint8_t qs[QK5_1 / 2]; // nibbles / quants
 } block_q5_1;
 static_assert(sizeof(block_q5_1) == 2 * sizeof(ggml_half) + sizeof(uint32_t) + QK5_1 / 2, "wrong q5_1 block size/padding");
+
+#define QK6_0 32
+typedef struct {
+    ggml_half d;         // delta
+    uint8_t qh[QK6_0/4]; // 5+6-th bit of quants
+    uint8_t qs[QK6_0/2]; // nibbles / quants
+} block_q6_0;
+static_assert(sizeof(block_q6_0) == sizeof(ggml_half) + QK6_0/2 + QK6_0/4, "wrong q6_0 block size/padding");
+
+typedef struct {
+    ggml_half d[4];      // delta
+    uint8_t qh[QK6_0];   // 5+6-th bit of quants
+    uint8_t qs[QK6_0*2]; // nibbles / quants
+} block_q6_0_r4;
+static_assert(sizeof(block_q6_0_r4) == 4*sizeof(ggml_half) + QK6_0*2 + QK6_0, "wrong q6_0_r4 block size/padding");
 
 #define QK8_0 32
 typedef struct {
@@ -208,13 +221,7 @@ static_assert(sizeof(block_q8_0) == sizeof(ggml_half) + QK8_0, "wrong q8_0 block
 
 #define QK8_1 32
 typedef struct {
-    union {
-        struct {
-            ggml_half d; // delta
-            ggml_half s; // d * sum(qs[i])
-        } GGML_COMMON_AGGR;
-        ggml_half2 ds;
-    };
+    GGML_SCALE_TYPE1(s, ds);
     int8_t qs[QK8_1]; // quants
 } block_q8_1;
 static_assert(sizeof(block_q8_1) == 2*sizeof(ggml_half) + QK8_1, "wrong q8_1 block size/padding");
@@ -265,15 +272,16 @@ static_assert(sizeof(block_q8_0x8) == 8 * sizeof(ggml_half) + QK8_0 * 8, "wrong 
 typedef struct {
     uint8_t scales[QK_K/16]; // scales and mins, quantized with 4 bits
     uint8_t qs[QK_K/4];      // quants
-    union {
-        struct {
-            ggml_half d;    // super-block scale for quantized scales
-            ggml_half dmin; // super-block scale for quantized mins
-        } GGML_COMMON_AGGR;
-        ggml_half2 dm;
-    };
+    GGML_SCALE_TYPE1(dmin, dm);
 } block_q2_K;
 static_assert(sizeof(block_q2_K) == 2*sizeof(ggml_half) + QK_K/16 + QK_K/4, "wrong q2_K block size/padding");
+
+typedef struct {
+    ggml_half d[8];
+    uint8_t scales[QK_K/4]; // scales and mins, quantized with 4 bits
+    uint8_t qs[QK_K];       // quants
+} block_q2_k_r4;
+static_assert(sizeof(block_q2_k_r4) == 8*sizeof(ggml_half) + QK_K/4 + QK_K, "wrong q2_k_r4 block size/padding");
 
 // 3-bit quantization
 // weight is represented as x = a * q
@@ -287,40 +295,54 @@ typedef struct {
 } block_q3_K;
 static_assert(sizeof(block_q3_K) == sizeof(ggml_half) + QK_K / 4 + QK_K / 8 + 12, "wrong q3_K block size/padding");
 
+typedef struct {
+    ggml_half d[4];             // super-block scales
+    uint8_t scales_h[QK_K/16];  // scales quantized with 6 bits (high 2 bits)
+    uint8_t scales_l[QK_K/8];   // scales quantized with 6 bits (low  4 bits)
+    uint8_t qh[QK_K/2];         // quants - high bit
+    uint8_t qs[QK_K];           // quants - low 2 bits
+} block_q3_k_r4;
+static_assert(sizeof(block_q3_k_r4) == 4*sizeof(ggml_half) + QK_K/16 + QK_K/8 + QK_K/2 + QK_K, "wrong q3_k_r4 block size/padding");
+
 // 4-bit quantization
 // 8 blocks of 32 elements each
 // weight is represented as x = a * q + b
 // Effectively 4.5 bits per weight
 typedef struct {
-    union {
-        struct {
-            ggml_half d;    // super-block scale for quantized scales
-            ggml_half dmin; // super-block scale for quantized mins
-        } GGML_COMMON_AGGR;
-        ggml_half2 dm;
-    };
+    GGML_SCALE_TYPE1(dmin, dm);
     uint8_t scales[K_SCALE_SIZE]; // scales and mins, quantized with 6 bits
     uint8_t qs[QK_K/2];           // 4--bit quants
 } block_q4_K;
 static_assert(sizeof(block_q4_K) == 2*sizeof(ggml_half) + K_SCALE_SIZE + QK_K/2, "wrong q4_K block size/padding");
+
+typedef struct {
+    ggml_half d[8];
+    uint8_t scales_h[QK_K/16];// scales and mins, quantized with 6 bits
+    uint8_t scales_l[QK_K/8]; // scales and mins, quantized with 6 bits
+    uint8_t qs[QK_K*2];           // 4--bit quants
+} block_q4_k_r4;
+static_assert(sizeof(block_q4_k_r4) == 8*sizeof(ggml_half) + QK_K/16 + QK_K/8 + QK_K*2, "wrong q4_k_r4 block size/padding");
 
 // 5-bit quantization
 // 8 blocks of 32 elements each
 // weight is represented as x = a * q + b
 // Effectively 5.5 bits per weight
 typedef struct {
-    union {
-        struct {
-            ggml_half d;    // super-block scale for quantized scales
-            ggml_half dmin; // super-block scale for quantized mins
-        } GGML_COMMON_AGGR;
-        ggml_half2 dm;
-    };
+    GGML_SCALE_TYPE1(dmin, dm);
     uint8_t scales[K_SCALE_SIZE]; // scales and mins, quantized with 6 bits
     uint8_t qh[QK_K/8];           // quants, high bit
     uint8_t qs[QK_K/2];           // quants, low 4 bits
 } block_q5_K;
 static_assert(sizeof(block_q5_K) == 2*sizeof(ggml_half) + K_SCALE_SIZE + QK_K/2 + QK_K/8, "wrong q5_K block size/padding");
+
+typedef struct {
+    ggml_half d[8];
+    uint8_t scales_h[QK_K/16];// scales and mins, quantized with 6 bits
+    uint8_t scales_l[QK_K/8]; // scales and mins, quantized with 6 bits
+    uint8_t qh[QK_K/2];           // quants, high bit
+    uint8_t qs[QK_K*2];           // quants, low 4 bits
+} block_q5_k_r4;
+static_assert(sizeof(block_q5_k_r4) == 8*sizeof(ggml_half) + QK_K/16 + QK_K/8 + QK_K/2 + QK_K*2, "wrong q5_k_r4 block size/padding");
 
 // 6-bit quantization
 // weight is represented as x = a * q
@@ -333,6 +355,14 @@ typedef struct {
     ggml_half d;             // super-block scale
 } block_q6_K;
 static_assert(sizeof(block_q6_K) == sizeof(ggml_half) + QK_K / 16 + 3*QK_K/4, "wrong q6_K block size/padding");
+
+typedef struct {
+    ggml_half d[4];          // super-block scale
+    int8_t  scales[QK_K/4];  // scales, quantized with 8 bits
+    uint8_t qh[QK_K];        // quants, upper 2 bits
+    uint8_t ql[QK_K*2];      // quants, lower 4 bits
+} block_q6_k_r4;
+static_assert(sizeof(block_q6_k_r4) == 4*sizeof(ggml_half) + QK_K/4 + 3*QK_K, "wrong q6_k_r4 block size/padding");
 
 // This is only used for intermediate quantization and dot products
 typedef struct {
@@ -352,6 +382,12 @@ typedef struct {
 } block_q8_K128;
 static_assert(sizeof(block_q8_K128) == sizeof(float) + 128, "wrong q8_K128 block size/padding");
 
+typedef struct {
+    ggml_half d[8];         // delta
+    int8_t    qs[8*QK_K];   // quants, stored as unsigned ints
+} block_q8_k_r8;
+static_assert(sizeof(block_q8_k_r8) == 8*sizeof(ggml_half) + 8*QK_K, "wrong q8_k_r8 block size/padding");
+
 // (Almost) "true" 2-bit quantization.
 // Due to the need to use blocks as per ggml design, it ends up using
 // 2.0625 bpw because of the 16-bit scale for each block of 256.
@@ -361,6 +397,13 @@ typedef struct {
 } block_iq2_xxs;
 static_assert(sizeof(block_iq2_xxs) == sizeof(ggml_half) + QK_K/8*sizeof(uint16_t), "wrong iq2_xxs block size/padding");
 
+typedef struct {
+    ggml_half d[4];
+    uint8_t   sas[QK_K/2];
+    uint8_t   qs[QK_K/2];
+} block_iq2_xxs_r4;
+static_assert(sizeof(block_iq2_xxs_r4) == 4*sizeof(block_iq2_xxs), "wrong iq2_xxs_r4 block size/padding");
+
 // 2.3125 bpw quants
 typedef struct {
     ggml_half d;
@@ -368,6 +411,13 @@ typedef struct {
     uint8_t  scales[QK_K/32];
 } block_iq2_xs;
 static_assert(sizeof(block_iq2_xs) == sizeof(ggml_half) + QK_K/8*sizeof(uint16_t) + QK_K/32, "wrong iq2_xs block size/padding");
+
+typedef struct {
+    ggml_half d[4];
+    uint16_t qs[QK_K/2];
+    uint8_t  scales[QK_K/8];
+} block_iq2_xs_r4;
+static_assert(sizeof(block_iq2_xs_r4) == 4*sizeof(block_iq2_xs), "wrong iq2_xs_r4 block size/padding");
 
 // 2.5625 bpw quants
 typedef struct {
@@ -378,6 +428,15 @@ typedef struct {
 } block_iq2_s;
 static_assert(sizeof(block_iq2_s) == sizeof(ggml_half) + QK_K/4 + QK_K/16, "wrong iq2_s block size/padding");
 
+typedef struct {
+    ggml_half d[4];
+    uint8_t qs[QK_K/2];
+    uint8_t qh[QK_K/8];
+    uint8_t signs[QK_K/2];
+    uint8_t scales[QK_K/8];
+} block_iq2_s_r4;
+static_assert(sizeof(block_iq2_s_r4) == 4*sizeof(block_iq2_s), "wrong iq2_s_r4 block size/padding");
+
 // (Almost) "true" 3-bit quantization.
 // Due to the need to use blocks as per ggml design, it ends up using
 // 3.0625 bpw because of the 16-bit scale for each block of 256.
@@ -386,6 +445,13 @@ typedef struct {
     uint8_t qs[3*QK_K/8];
 } block_iq3_xxs;
 static_assert(sizeof(block_iq3_xxs) == sizeof(ggml_half) + 3*(QK_K/8), "wrong iq3_xxs block size/padding");
+
+typedef struct {
+    ggml_half d[4];
+    uint8_t   sas[QK_K/2];
+    uint8_t   qs[QK_K];
+} block_iq3_xxs_r4;
+static_assert(sizeof(block_iq3_xxs_r4) == 4*sizeof(block_iq3_xxs), "wrong iq3_xxs_r4 block size/padding");
 
 // 3.4375 bpw
 #define IQ3S_N_SCALE QK_K/64
@@ -397,6 +463,15 @@ typedef struct {
     uint8_t scales[IQ3S_N_SCALE];
 } block_iq3_s;
 static_assert(sizeof(block_iq3_s) == sizeof(ggml_half) + 13*(QK_K/32) + IQ3S_N_SCALE, "wrong iq3_s block size/padding");
+
+typedef struct {
+    ggml_half d[4];
+    uint8_t qs[QK_K];
+    uint8_t qh[QK_K/8];
+    uint8_t signs[QK_K/2];
+    uint8_t scales[4*IQ3S_N_SCALE];
+} block_iq3_s_r4;
+static_assert(sizeof(block_iq3_s_r4) == 4*sizeof(block_iq3_s), "wrong iq3_s_r4 block size/padding");
 
 typedef struct {
     ggml_half d;
@@ -414,9 +489,7 @@ typedef struct {
 static_assert(sizeof(block_iq1_m) == QK_K/8 + QK_K/16 + QK_K/32, "wrong iq1_m block size/padding");
 
 //
-// Bitnet - implemented as 1.625 bpw
-// The block scale is a waste, but it allows us to plug it in without any additional
-// changes to ggml.
+// Bitnet and TriLM - implemented as 1.625 bpw
 //
 #define QK_IQ1BN 64
 typedef struct {
@@ -425,21 +498,13 @@ typedef struct {
 } block_iq1_bn;
 static_assert(sizeof(block_iq1_bn) == 13, "wrong iq1_bn block size/padding");
 //
-// Bitnet - implemented as 2.0 bpw
+// Bitnet and TriLM - implemented as 2.0 bpw
 //
 #define QK_IQ2BN 64
 typedef struct {
     uint8_t qs[QK_IQ2BN/4];
 } block_iq2_bn;
 static_assert(sizeof(block_iq2_bn) == QK_IQ2BN/4, "wrong iq2_bn block size/padding");
-//
-// TriLM - implemented as 2.0625 bpw
-//
-typedef struct {
-    ggml_half d;
-    uint8_t qs[QK_K/4];
-} block_iq2_tn;
-static_assert(sizeof(block_iq2_tn) == sizeof(ggml_half) + QK_K/4, "wrong iqt_bn block size/padding");
 
 // Used by IQ1_M quants
 typedef union {
@@ -454,6 +519,11 @@ typedef struct {
     uint8_t qs[QK4_NL/2];
 } block_iq4_nl;
 static_assert(sizeof(block_iq4_nl) == sizeof(ggml_half) + QK4_NL/2, "wrong iq4_nl block size/padding");
+typedef struct {
+    ggml_half d[4];
+    uint8_t qs[2*QK4_NL];
+} block_iq4_nl_r4;
+static_assert(sizeof(block_iq4_nl_r4) == 4*sizeof(ggml_half) + 2*QK4_NL, "wrong iq4_nl_x4 block size/padding");
 
 typedef struct {
     ggml_half d;
@@ -464,12 +534,52 @@ typedef struct {
 static_assert(sizeof(block_iq4_xs) == sizeof(ggml_half) + sizeof(uint16_t) + QK_K/64 + QK_K/2, "wrong iq4_xs block size/padding");
 
 typedef struct {
+    ggml_half d[4];
+    uint8_t scales_h[QK_K/32];
+    uint8_t scales_l[QK_K/16];
+    uint8_t qs[QK_K*2];
+} block_iq4_xs_r4;
+static_assert(sizeof(block_iq4_xs_r4) == 4*sizeof(ggml_half) + QK_K/32 + QK_K/16 + QK_K*2, "wrong iq4_xs_rs block size/padding");
+
+typedef struct {
+    uint8_t  scales[QK_K/32];
+    uint8_t  qs[QK_K/2];
+} block_iq4_ks;
+static_assert(sizeof(block_iq4_ks) == QK_K/32 + QK_K/2, "wrong iq4_ks block size/padding");
+
+typedef struct {
+    uint8_t  scales[QK_K/8];
+    uint8_t  qs[QK_K*2];
+} block_iq4_ks_r4;
+static_assert(sizeof(block_iq4_ks_r4) == 4*sizeof(block_iq4_ks), "wrong iq4_ks_r4 block size/padding");
+
+typedef struct {
+    uint32_t qs[QK_K/8];
+} block_iq4_kss;
+static_assert(sizeof(block_iq4_kss) == QK_K/8*sizeof(uint32_t), "wrong iq4_kss block size/padding");
+
+typedef struct {
     ggml_half d;
     uint16_t extra;
     uint8_t  scales[QK_K/32];
     uint8_t  qs[QK_K/4];
 } block_iq2_k;
 static_assert(sizeof(block_iq2_k) == sizeof(ggml_half) + sizeof(uint16_t) + QK_K/32 + QK_K/4, "wrong iq2_k block size/padding");
+
+typedef struct {
+    ggml_half d[4];
+    uint8_t  extra[8];
+    uint8_t  scales[QK_K/8];
+    uint8_t  qs[QK_K];
+} block_iq2_k_r4;
+static_assert(sizeof(block_iq2_k_r4) == 4*sizeof(block_iq2_k), "wrong iq2_k_r4 block size/padding");
+
+typedef struct {
+    uint16_t extra;
+    uint8_t  scales[QK_K/64];
+    uint8_t  qs[QK_K/4];
+} block_iq2_ks;
+static_assert(sizeof(block_iq2_ks) == sizeof(uint16_t) + QK_K/64 + QK_K/4, "wrong iq2_ks block size/padding");
 
 typedef struct {
     ggml_half d;
@@ -482,6 +592,16 @@ typedef struct {
 static_assert(sizeof(block_iq3_k) == sizeof(ggml_half) + 2*sizeof(uint16_t) + QK_K/32 + QK_K/4 + QK_K/8, "wrong iq3_k block size/padding");
 
 typedef struct {
+    ggml_half d[4];
+    uint8_t extra[8];
+    uint8_t scales_h[QK_K/32];
+    uint8_t scales_l[QK_K/8];
+    uint8_t qs[QK_K];
+    uint8_t qh[QK_K/2];
+} block_iq3_k_r4;
+static_assert(sizeof(block_iq3_k_r4) == 4*sizeof(block_iq3_k), "wrong iq3_k_r4 block size/padding");
+
+typedef struct {
     ggml_half d;
     uint16_t extra;
     uint8_t  scales_h[QK_K/64];
@@ -489,6 +609,15 @@ typedef struct {
     uint8_t  qs[QK_K/2];
 } block_iq4_k;
 static_assert(sizeof(block_iq4_k) == sizeof(ggml_half) + sizeof(uint16_t) + QK_K/2 + 3*QK_K/64, "wrong iq4_k block size/padding");
+
+typedef struct {
+    ggml_half d[4];
+    uint8_t  extra[8];
+    uint8_t  scales_h[QK_K/16];
+    uint8_t  scales_l[QK_K/8];
+    uint8_t  qs[QK_K*2];
+} block_iq4_k_r4;
+static_assert(sizeof(block_iq4_k_r4) == 4*sizeof(block_iq4_k), "wrong iq4_k_r4 block size/padding");
 
 typedef struct {
     ggml_half d;
@@ -499,6 +628,16 @@ typedef struct {
     uint8_t  qh[QK_K/8];
 } block_iq5_k;
 static_assert(sizeof(block_iq5_k) == sizeof(ggml_half) + sizeof(uint16_t) + QK_K/2 + QK_K/8 + 3*QK_K/64, "wrong iq5_k block size/padding");
+
+typedef struct {
+    ggml_half d[4];
+    uint8_t  extra[8];
+    uint8_t  scales_h[QK_K/16];
+    uint8_t  scales_l[QK_K/8 ];
+    uint8_t  qs[QK_K*2];
+    uint8_t  qh[QK_K/2];
+} block_iq5_k_r4;
+static_assert(sizeof(block_iq5_k_r4) == 4*sizeof(block_iq5_k), "wrong iq5_k_r4 block size/padding");
 
 typedef struct {
     ggml_half d;

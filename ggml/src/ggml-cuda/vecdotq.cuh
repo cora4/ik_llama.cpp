@@ -48,6 +48,30 @@ template <int vdr> static __device__ __forceinline__ float vec_dot_q4_0_q8_1_imp
     return d4 * (sumi * ds8f.x - (8*vdr/QI4_0) * ds8f.y);
 }
 
+#define VDR_Q6_0_Q8_1_MMVQ 2
+#define VDR_Q6_0_Q8_1_MMQ  4
+
+template <int vdr> static __device__ __forceinline__ float vec_dot_q6_0_q8_1_impl(
+    const int * vl, const int * vh, const int * u, const float & d6, const half2 & ds8) {
+
+    int sumi = 0;
+
+#pragma unroll
+    for (int i = 0; i < vdr; ++i) {
+        const int vi0 = ((vl[i] >> 0) & 0x0F0F0F0F) | ((vh[i] << 4) & 0x30303030);
+        const int vi1 = ((vl[i] >> 4) & 0x0F0F0F0F) | ((vh[i] << 2) & 0x30303030);
+
+        // SIMD dot product of quantized values
+        sumi = ggml_cuda_dp4a(vi0, u[2*i+0], sumi);
+        sumi = ggml_cuda_dp4a(vi1, u[2*i+1], sumi);
+    }
+
+    const float2 ds8f = __half22float2(ds8);
+
+    // second part effectively subtracts 8 from each quant value
+    return d6 * (sumi * ds8f.x - (32.f*vdr/QI6_0) * ds8f.y);
+}
+
 #define VDR_Q4_1_Q8_1_MMVQ 2
 #define VDR_Q4_1_Q8_1_MMQ  4
 
@@ -547,6 +571,26 @@ static __device__ __forceinline__ float vec_dot_q4_0_q8_1(
     }
 
     return vec_dot_q4_0_q8_1_impl<VDR_Q4_0_Q8_1_MMVQ>(v, u, bq4_0->d, bq8_1->ds);
+}
+
+static __device__ __forceinline__ float vec_dot_q6_0_q8_1(
+    const void * __restrict__ vbq, const block_q8_1 * __restrict__ bq8_1, const int & kbx, const int & iqs) {
+
+    const block_q6_0 * bq6_0 = (const block_q6_0 *) vbq + kbx;
+
+    int vl[VDR_Q6_0_Q8_1_MMVQ];
+    int vh[VDR_Q6_0_Q8_1_MMVQ];
+    int u[2*VDR_Q6_0_Q8_1_MMVQ];
+
+#pragma unroll
+    for (int i = 0; i < VDR_Q6_0_Q8_1_MMVQ; ++i) {
+        vl[i]    = get_int_b2(bq6_0->qs, iqs + i);
+        vh[i]    = get_int_b2(bq6_0->qh,       i) >> 4*(iqs/2);
+        u[2*i+0] = get_int_b4(bq8_1->qs, iqs + i);
+        u[2*i+1] = get_int_b4(bq8_1->qs, iqs + i + QI6_0);
+    }
+
+    return vec_dot_q6_0_q8_1_impl<VDR_Q6_0_Q8_1_MMVQ>(vl, vh, u, bq6_0->d, bq8_1->ds);
 }
 
 
@@ -1071,95 +1115,6 @@ static __device__ __forceinline__ float vec_dot_iq1_m_q8_1(
     const int sc0 = 2*((tmp >> 0) & 0x07) + 1;
     const int sc1 = 2*((tmp >> 3) & 0x07) + 1;
     return d * ((sumi[0] + sumf[0]) * sc0 + (sumi[1] + sumf[1]) * sc1);
-}
-
-static __device__ __forceinline__ float vec_dot_iq1_bn_q8_1(
-    const void * __restrict__ vbq, const block_q8_1 * __restrict__ bq8_1, const int & kbx, const int & iqs) {
-    const block_iq1_bn * bq1 = (const block_iq1_bn *) vbq + kbx;
-
-    static const uint8_t k_mult[5] = {81, 27, 9, 3, 1};
-
-    // iqs is 0 or 1
-
-    int sumi = 0;
-#if __CUDA_ARCH__ >= MIN_CC_DP4A // lowest compute capability for integer intrinsics
-    const int * q8 = (const int *)bq8_1[iqs].qs;
-    int val[4];
-    for (int l = 0; l < 2; ++l) {
-        int8_t * a = (int8_t *)val;
-        const int i16 = 2*iqs + l;
-        for (int k = 0; k < 3; ++k) {
-            uint8_t q = bq1->ql[3*i16+k];
-            for (int j = 0; j < 5; ++j) {
-                uint8_t v = k_mult[j]*q;
-                int8_t vs = 3*v >> 8; //(v + (v >> 1)) >> 7;
-                *a++ = vs-1;
-            }
-        }
-        uint8_t v = k_mult[i16]*bq1->extra;
-        int8_t vs = 3*v >> 8; //(v + (v >> 1)) >> 7;
-        *a++ = vs-1;
-        sumi = __dp4a(val[0], q8[4*l+0], __dp4a(val[1], q8[4*l+1], __dp4a(val[2], q8[4*l+2], __dp4a(val[3], q8[4*l+3], sumi))));
-    }
-#else
-    const int8_t * q8 = bq8_1[iqs].qs;
-    for (int l = 0; l < 2; ++l) {
-        const int i16 = 2*iqs + l;
-        for (int k = 0; k < 3; ++k) {
-            uint8_t q = bq1->ql[3*i16+k];
-            for (int j = 0; j < 5; ++j) {
-                uint8_t v = k_mult[j]*q;
-                int8_t vs = (v + (v >> 1)) >> 7;
-                sumi += q8[j]*(vs - 1);
-            }
-            q8 += 5;
-        }
-        uint8_t v = k_mult[i16]*bq1->extra;
-        int8_t vs = (v + (v >> 1)) >> 7;
-        sumi += q8[0]*(vs - 1);
-        q8++;
-    }
-#endif
-    return __low2float(bq8_1[iqs].ds) * sumi;
-}
-
-static __device__ __forceinline__ float vec_dot_iq2_bn_q8_1(
-    const void * __restrict__ vbq, const block_q8_1 * __restrict__ bq8_1, const int & kbx, const int & iqs) {
-    const block_iq2_bn * bq2 = (const block_iq2_bn *) vbq + kbx;
-
-    // iqs is 0 or 1
-
-#if __CUDA_ARCH__ >= MIN_CC_DP4A // lowest compute capability for integer intrinsics
-    auto qs  = (const uint16_t *)bq2->qs + 4*iqs;
-    auto q8l = (const int *)bq8_1[0].qs + 2*iqs;
-    auto q8h = (const int *)bq8_1[1].qs + 2*iqs;
-    int sumi1 = 0, sumi2 = 0, sumi3 = 0, sumi4 = 0;
-    for (int j = 0; j < 2; ++j) {
-        int vl = qs[2*j+0] | (uint32_t(qs[2*j+1]) << 16);
-        int vh = vl >> 4;
-        sumi1 = __dp4a(vl & 0x03030303, q8l[j+0], sumi1);
-        sumi2 = __dp4a(vl & 0x0c0c0c0c, q8l[j+4], sumi2);
-        sumi3 = __dp4a(vh & 0x03030303, q8h[j+0], sumi3);
-        sumi4 = __dp4a(vh & 0x0c0c0c0c, q8h[j+4], sumi4);
-    }
-    auto d8l = __half22float2(bq8_1[0].ds);
-    auto d8h = __half22float2(bq8_1[1].ds);
-    return d8l.x * (sumi1 + 0.25f*sumi2) + d8h.x * (sumi3 + 0.25f * sumi4) - 0.5f*d8l.y - 0.5f*d8h.y;
-#else
-    int sumi1 = 0, sumi2 = 0, sumi3 = 0, sumi4 = 0;
-    auto q8l = bq8_1[0].qs + 8*iqs;
-    auto q8h = bq8_1[1].qs + 8*iqs;
-    auto qs  = bq2->qs + 8*iqs;
-    for (int j = 0; j < 8; ++j) {
-        sumi1 += q8l[j+ 0] * (qs[j] & 0x03);
-        sumi2 += q8l[j+16] * (qs[j] & 0x0c);
-        sumi3 += q8h[j+ 0] * (qs[j] & 0x30);
-        sumi4 += q8h[j+16] * (qs[j] & 0xc0);
-    }
-    auto d8l = __half22float2(bq8_1[0].ds);
-    auto d8h = __half22float2(bq8_1[1].ds);
-    return d8l.x * (sumi1 + 0.25f*sumi2) + 0.0625f * d8h.x*(sumi3 + 0.25f*sumi4) - 0.5f*d8l.y - 0.5f*d8h.y;
-#endif
 }
 
 static __device__ __forceinline__ int2 get_int_from_table_16(const int & q4) {
