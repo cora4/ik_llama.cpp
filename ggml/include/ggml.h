@@ -240,7 +240,10 @@
 // if you need to load more than 64 model shards.
 #define GGML_MAX_CONTEXTS       64
 #endif
-#define GGML_MAX_SRC            12
+#ifndef GGML_MAX_SRC
+// For the machines with 11+ GPUs use -DGGML_MAX_SRC=N
+#define GGML_MAX_SRC            16
+#endif
 #ifndef GGML_MAX_NAME
 #define GGML_MAX_NAME           64
 #endif
@@ -700,6 +703,8 @@ extern "C" {
         GGML_OP_FAKE_CPY,
         GGML_OP_FUSED_NORM,
         GGML_OP_FUSED_RMS_RMS_ADD,
+        GGML_OP_BLEND,
+        GGML_OP_INDEXER_TOPK,
 
         GGML_OP_COUNT,
     };
@@ -826,6 +831,9 @@ extern "C" {
         // abort ggml_graph_compute when true
         ggml_abort_callback abort_callback;
         void *              abort_callback_data;
+
+        // read-ahead selected MoE expert weights in the CPU matmul-id kernels
+        bool moe_expert_prefetch;
     };
 
     enum ggml_cgraph_eval_order {
@@ -2390,6 +2398,14 @@ extern "C" {
             struct ggml_tensor  * a,
             float                 c);
 
+    // Overwrite values in a with c for the indeces stored in b
+    GGML_API struct ggml_tensor * ggml_blend(
+            struct ggml_context * ctx,
+            struct ggml_tensor  * a,
+            struct ggml_tensor  * b,
+            float                 c);
+
+
     // sort rows
     enum ggml_sort_order {
         GGML_SORT_ORDER_ASC,
@@ -2552,6 +2568,15 @@ extern "C" {
             struct ggml_tensor  * beta,
             struct ggml_tensor  * state,
             struct ggml_tensor  * saved_steps);
+
+    GGML_API struct ggml_tensor * ggml_indexer_topk(
+            struct ggml_context * ctx,
+            struct ggml_tensor  * k,
+            struct ggml_tensor  * q,
+            struct ggml_tensor  * w,
+            struct ggml_tensor  * mask,
+            enum ggml_unary_op    op,
+            int                   n_top_k);
 
     // custom operators
 
@@ -3123,7 +3148,6 @@ extern "C" {
     GGML_API int ggml_cpu_has_blas       (void);
     GGML_API int ggml_cpu_has_cuda       (void);
     GGML_API int ggml_cpu_has_vulkan     (void);
-    GGML_API int ggml_cpu_has_kompute    (void);
     GGML_API int ggml_cpu_has_gpublas    (void);
     GGML_API int ggml_cpu_has_sse3       (void);
     GGML_API int ggml_cpu_has_ssse3      (void);

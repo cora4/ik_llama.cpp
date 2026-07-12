@@ -53,6 +53,8 @@ add_library(llama
             llama-build-context.cpp
             llama-model.h
             llama-model.cpp
+            llama-reload-info.h
+            llama-reload.cpp
             llama-quantize.cpp
             llama-arch.h
             llama-arch.cpp
@@ -109,6 +111,7 @@ add_library(llama
             graphs/build_gptneox.cpp
             graphs/build_arctic.cpp
             graphs/build_deepseek2.cpp
+            graphs/build_openpangu.cpp
             graphs/build_glm4.cpp
             graphs/build_bitnet.cpp
             graphs/build_cohere2.cpp
@@ -140,4 +143,7 @@ endif()
 
 if (GGML_MAX_CONTEXTS)
     add_compile_definitions(GGML_MAX_CONTEXTS=${GGML_MAX_CONTEXTS})
+endif()
+if (GGML_MAX_SRC)
+  add_compile_definitions(GGML_MAX_SRC=${GGML_MAX_SRC})
 endif()

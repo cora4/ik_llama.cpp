@@ -113,12 +113,16 @@ class Keys:
         CAUSAL            = "{arch}.attention.causal"
         Q_LORA_RANK       = "{arch}.attention.q_lora_rank"
         KV_LORA_RANK      = "{arch}.attention.kv_lora_rank"
+        INDEXER_HEAD_COUNT = "{arch}.attention.indexer.head_count"
+        INDEXER_KEY_LENGTH = "{arch}.attention.indexer.key_length"
+        INDEXER_TOP_K      = "{arch}.attention.indexer.top_k"
         REL_BUCKETS_COUNT = "{arch}.attention.relative_buckets_count"
         SLIDING_WINDOW    = "{arch}.attention.sliding_window"
         SLIDING_WINDOW_PATTERN = "{arch}.attention.sliding_window_pattern"
         SHARED_KV_LAYERS       = "{arch}.attention.shared_kv_layers"
         KEY_LENGTH_SWA         = "{arch}.attention.key_length_swa"
         VALUE_LENGTH_SWA       = "{arch}.attention.value_length_swa"
+        VALUE_SCALE                  = "{arch}.attention.value_scale"
         OUTPUT_SCALE                 = "{arch}.attention.output_scale"
         TEMPERATURE_LENGTH           = "{arch}.attention.temperature_length"
 
@@ -259,6 +263,7 @@ class MODEL_ARCH(IntEnum):
     ARCTIC       = auto()
     DEEPSEEK2    = auto()
     GLM4_MOE     = auto()
+    OPENPANGU    = auto()
     CHATGLM      = auto()
     BITNET       = auto()
     BITNET_25    = auto()
@@ -319,6 +324,7 @@ class MODEL_TENSOR(IntEnum):
     FFN_EXP_PROBS_B      = auto()
     ATTN_Q_NORM          = auto()
     ATTN_K_NORM          = auto()
+    ATTN_SINKS           = auto()
     LAYER_OUT_NORM       = auto()
     LAYER_OUT_SCALE      = auto()
     PER_LAYER_TOKEN_EMBD = auto()
@@ -384,6 +390,33 @@ class MODEL_TENSOR(IntEnum):
     MTP_CENTROIDS        = auto()
     DFLASH_FC            = auto()
     DFLASH_HIDDEN_NORM   = auto()
+    # openPangu-2.0 (DSA lightning indexer)
+    INDEXER_K_NORM       = auto()
+    INDEXER_PROJ         = auto()   # weights_proj
+    INDEXER_ATTN_K       = auto()   # wk
+    INDEXER_ATTN_Q_B     = auto()   # wq_b
+    # openPangu-2.0 (MoME causal-conv on MLA latents)
+    ATTN_QA_CONV         = auto()
+    ATTN_KV_CONV         = auto()   # compresskv_conv
+    ATTN_O_CONV          = auto()
+    # openPangu-2.0 (learned static param sink)
+    ATTN_PARAM_SINK_KV   = auto()   # param_sink_compressed_kv
+    ATTN_PARAM_SINK_K_PE = auto()   # param_sink_k_pe
+    # openPangu-2.0 (mHC / Hyper-Connections: per-attn, per-mlp, global merge)
+    MHC_ATTN_PHI         = auto()
+    MHC_ATTN_ALPHA       = auto()
+    MHC_ATTN_BETA        = auto()
+    MHC_ATTN_GAMMA       = auto()
+    MHC_MLP_PHI          = auto()
+    MHC_MLP_ALPHA        = auto()
+    MHC_MLP_BETA         = auto()
+    MHC_MLP_GAMMA        = auto()
+    MHC_MERGE_PHI        = auto()
+    MHC_MERGE_ALPHA      = auto()   # branch_alpha_pre
+    MHC_MERGE_BETA       = auto()   # branch_beta_pre
+    MHC_MERGE_GAMMA      = auto()
+    # openPangu-2.0 (sandwich norm: extra whole-block post-norm on a layer subset)
+    BLOCK_POST_NORM      = auto()
 
 
 MODEL_ARCH_NAMES: dict[MODEL_ARCH, str] = {
@@ -435,6 +468,7 @@ MODEL_ARCH_NAMES: dict[MODEL_ARCH, str] = {
     MODEL_ARCH.DEEPSEEK2:      "deepseek2",
     MODEL_ARCH.CHATGLM:        "chatglm",
     MODEL_ARCH.GLM4_MOE:       "glm4moe",
+    MODEL_ARCH.OPENPANGU:      "openpangu",
     MODEL_ARCH.BITNET:         "bitnet",
     MODEL_ARCH.BITNET_25:      "bitnet-25",
     MODEL_ARCH.T5:             "t5",
@@ -470,6 +504,7 @@ TENSOR_NAMES: dict[MODEL_TENSOR, str] = {
     MODEL_TENSOR.ATTN_ROT_EMBD:        "blk.{bid}.attn_rot_embd",
     MODEL_TENSOR.ATTN_Q_NORM:          "blk.{bid}.attn_q_norm",
     MODEL_TENSOR.ATTN_K_NORM:          "blk.{bid}.attn_k_norm",
+    MODEL_TENSOR.ATTN_SINKS:           "blk.{bid}.attn_sinks",
     MODEL_TENSOR.ATTN_OUT_NORM:        "blk.{bid}.attn_output_norm",
     MODEL_TENSOR.ATTN_POST_NORM:       "blk.{bid}.post_attention_norm",
     MODEL_TENSOR.ATTN_GATE:            "blk.{bid}.attn_gate",
@@ -560,6 +595,29 @@ TENSOR_NAMES: dict[MODEL_TENSOR, str] = {
     MODEL_TENSOR.MTP_CENTROIDS:             "mtp_centroids",
     MODEL_TENSOR.DFLASH_FC:                 "dflash_fc",
     MODEL_TENSOR.DFLASH_HIDDEN_NORM:        "dflash_hidden_norm",
+    # openPangu-2.0
+    MODEL_TENSOR.INDEXER_K_NORM:            "blk.{bid}.attn_indexer_k_norm",
+    MODEL_TENSOR.INDEXER_PROJ:              "blk.{bid}.attn_indexer_weights_proj",
+    MODEL_TENSOR.INDEXER_ATTN_K:            "blk.{bid}.attn_indexer_k",
+    MODEL_TENSOR.INDEXER_ATTN_Q_B:          "blk.{bid}.attn_indexer_q_b",
+    MODEL_TENSOR.ATTN_QA_CONV:              "blk.{bid}.attn_qa_conv",
+    MODEL_TENSOR.ATTN_KV_CONV:              "blk.{bid}.attn_compresskv_conv",
+    MODEL_TENSOR.ATTN_O_CONV:               "blk.{bid}.attn_o_conv",
+    MODEL_TENSOR.ATTN_PARAM_SINK_KV:        "blk.{bid}.attn_param_sink_kv",
+    MODEL_TENSOR.ATTN_PARAM_SINK_K_PE:      "blk.{bid}.attn_param_sink_k_pe",
+    MODEL_TENSOR.MHC_ATTN_PHI:              "blk.{bid}.attn_mhc_phi",
+    MODEL_TENSOR.MHC_ATTN_ALPHA:            "blk.{bid}.attn_mhc_alpha",
+    MODEL_TENSOR.MHC_ATTN_BETA:             "blk.{bid}.attn_mhc_beta",
+    MODEL_TENSOR.MHC_ATTN_GAMMA:            "blk.{bid}.attn_mhc_gamma",
+    MODEL_TENSOR.MHC_MLP_PHI:               "blk.{bid}.mlp_mhc_phi",
+    MODEL_TENSOR.MHC_MLP_ALPHA:             "blk.{bid}.mlp_mhc_alpha",
+    MODEL_TENSOR.MHC_MLP_BETA:              "blk.{bid}.mlp_mhc_beta",
+    MODEL_TENSOR.MHC_MLP_GAMMA:             "blk.{bid}.mlp_mhc_gamma",
+    MODEL_TENSOR.MHC_MERGE_PHI:             "merge_mhc_phi",
+    MODEL_TENSOR.MHC_MERGE_ALPHA:           "merge_mhc_alpha",
+    MODEL_TENSOR.MHC_MERGE_BETA:            "merge_mhc_beta",
+    MODEL_TENSOR.MHC_MERGE_GAMMA:           "merge_mhc_gamma",
+    MODEL_TENSOR.BLOCK_POST_NORM:           "blk.{bid}.block_post_norm",
 }
 
 MODEL_TENSORS: dict[MODEL_ARCH, list[MODEL_TENSOR]] = {
@@ -1295,6 +1353,70 @@ MODEL_TENSORS: dict[MODEL_ARCH, list[MODEL_TENSOR]] = {
         MODEL_TENSOR.NEXTN_SHARED_HEAD_HEAD,
         MODEL_TENSOR.NEXTN_SHARED_HEAD_NORM,
     ],
+    MODEL_ARCH.OPENPANGU: [
+        MODEL_TENSOR.TOKEN_EMBD,
+        MODEL_TENSOR.OUTPUT_NORM,
+        MODEL_TENSOR.OUTPUT,
+        # MLA attention (deepseek-style)
+        MODEL_TENSOR.ATTN_NORM,
+        MODEL_TENSOR.ATTN_Q_A,
+        MODEL_TENSOR.ATTN_Q_B,
+        MODEL_TENSOR.ATTN_KV_A_MQA,
+        MODEL_TENSOR.ATTN_KV_B,
+        MODEL_TENSOR.ATTN_K_B,
+        MODEL_TENSOR.ATTN_V_B,
+        MODEL_TENSOR.ATTN_Q_A_NORM,
+        MODEL_TENSOR.ATTN_KV_A_NORM,
+        MODEL_TENSOR.ATTN_OUT,
+        MODEL_TENSOR.ATTN_POST_NORM,   # post_attention_layernorm (sandwich)
+        # DSA lightning indexer
+        MODEL_TENSOR.INDEXER_K_NORM,
+        MODEL_TENSOR.INDEXER_PROJ,
+        MODEL_TENSOR.INDEXER_ATTN_K,
+        MODEL_TENSOR.INDEXER_ATTN_Q_B,
+        # MoME causal convs + param sink
+        MODEL_TENSOR.ATTN_QA_CONV,
+        MODEL_TENSOR.ATTN_KV_CONV,
+        MODEL_TENSOR.ATTN_O_CONV,
+        MODEL_TENSOR.ATTN_PARAM_SINK_KV,
+        MODEL_TENSOR.ATTN_PARAM_SINK_K_PE,
+        # MoE (routed + shared + sigmoid bias) and dense-lead FFN
+        MODEL_TENSOR.FFN_NORM,         # pre_mlp_layernorm
+        MODEL_TENSOR.FFN_POST_NORM,    # post_mlp_layernorm (sandwich)
+        MODEL_TENSOR.FFN_GATE,
+        MODEL_TENSOR.FFN_DOWN,
+        MODEL_TENSOR.FFN_UP,
+        MODEL_TENSOR.FFN_GATE_INP,
+        MODEL_TENSOR.FFN_GATE_EXP,
+        MODEL_TENSOR.FFN_DOWN_EXP,
+        MODEL_TENSOR.FFN_UP_EXP,
+        MODEL_TENSOR.FFN_GATE_SHEXP,
+        MODEL_TENSOR.FFN_DOWN_SHEXP,
+        MODEL_TENSOR.FFN_UP_SHEXP,
+        MODEL_TENSOR.FFN_EXP_PROBS_B,
+        # mHC / Hyper-Connections
+        MODEL_TENSOR.MHC_ATTN_PHI,
+        MODEL_TENSOR.MHC_ATTN_ALPHA,
+        MODEL_TENSOR.MHC_ATTN_BETA,
+        MODEL_TENSOR.MHC_ATTN_GAMMA,
+        MODEL_TENSOR.MHC_MLP_PHI,
+        MODEL_TENSOR.MHC_MLP_ALPHA,
+        MODEL_TENSOR.MHC_MLP_BETA,
+        MODEL_TENSOR.MHC_MLP_GAMMA,
+        MODEL_TENSOR.MHC_MERGE_PHI,
+        MODEL_TENSOR.MHC_MERGE_ALPHA,
+        MODEL_TENSOR.MHC_MERGE_BETA,
+        MODEL_TENSOR.MHC_MERGE_GAMMA,
+        # sandwich extra block post-norm (layer subset)
+        MODEL_TENSOR.BLOCK_POST_NORM,
+        # NextN / MTP tail (3 layers)
+        MODEL_TENSOR.NEXTN_EH_PROJ,
+        MODEL_TENSOR.NEXTN_EMBED_TOKENS,
+        MODEL_TENSOR.NEXTN_ENORM,
+        MODEL_TENSOR.NEXTN_HNORM,
+        MODEL_TENSOR.NEXTN_SHARED_HEAD_HEAD,
+        MODEL_TENSOR.NEXTN_SHARED_HEAD_NORM,
+    ],
     MODEL_ARCH.DFLASH: [
         MODEL_TENSOR.OUTPUT_NORM,
         MODEL_TENSOR.ATTN_NORM,
@@ -1303,6 +1425,7 @@ MODEL_TENSORS: dict[MODEL_ARCH, list[MODEL_TENSOR]] = {
         MODEL_TENSOR.ATTN_K,
         MODEL_TENSOR.ATTN_K_NORM,
         MODEL_TENSOR.ATTN_V,
+        MODEL_TENSOR.ATTN_SINKS,
         MODEL_TENSOR.ATTN_OUT,
         MODEL_TENSOR.ATTN_POST_NORM,
         MODEL_TENSOR.FFN_GATE,
@@ -1321,6 +1444,7 @@ MODEL_TENSORS: dict[MODEL_ARCH, list[MODEL_TENSOR]] = {
         MODEL_TENSOR.ATTN_K,
         MODEL_TENSOR.ATTN_K_NORM,
         MODEL_TENSOR.ATTN_V,
+        MODEL_TENSOR.ATTN_SINKS,
         MODEL_TENSOR.ATTN_OUT,
         MODEL_TENSOR.ATTN_POST_NORM,
         MODEL_TENSOR.FFN_GATE,

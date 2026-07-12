@@ -6,6 +6,7 @@
 
 #include <cstddef>
 #include <memory>
+#include <vector>
 
 
 
@@ -116,7 +117,7 @@ struct server_slot {
 
     void prompt_save(server_prompt_cache& prompt_cache) const;
 
-    void prompt_load(server_prompt_cache& prompt_cache, const server_tokens& tokens);
+    void prompt_load(server_prompt_cache& prompt_cache, const server_tokens& tokens, float min_reusable_fraction);
 
     size_t checkpoint_pos = 0;
     bool do_checkpoint = false;
@@ -163,6 +164,8 @@ struct server_slot {
     // speculative decoding stats
     int32_t n_draft_total = 0;      // Total draft tokens generated
     int32_t n_draft_accepted = 0;   // Draft tokens actually accepted
+    std::vector<int32_t> n_draft_by_depth;
+    std::vector<int32_t> n_draft_accepted_by_depth;
 
     int32_t n_past_se = 0; // self-extend
 
