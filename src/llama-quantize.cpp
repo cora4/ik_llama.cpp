@@ -853,15 +853,6 @@ static ggml_type llama_tensor_get_type(quantize_state_internal & qs, ggml_type n
         }
     }
 
-    if (name == "per_layer_token_embd.weight") {
-        auto working_type = interleaved_properties(new_type).first;
-        if (working_type != new_type) {
-            printf("\n============ Per-layer Token embeddings cannot be quantized with row-interleaved quants\n");
-            printf("---> Changed %s to %s\n", ggml_type_name(new_type), ggml_type_name(working_type));
-            new_type = working_type;
-        }
-    }
-
     return new_type;
 }
 
