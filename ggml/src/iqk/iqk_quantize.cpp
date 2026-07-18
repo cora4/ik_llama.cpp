@@ -67,11 +67,7 @@ struct QHelper {
                 sumwx += wb[j]*std::abs(xb[j]);
             }
             if (sumw2 > m_block_size*kEps2 && sumx2 > m_block_size*kEps2 && sumwx > m_block_size*kEps2) continue;
-static inline __m256i mul_add_epi8(const __m256i x, const __m256i y) {
-    const __m256i ax = _mm256_sign_epi8(x, x);
-    const __m256i sy = _mm256_sign_epi8(y, x);
-    return _mm256_maddubs_epi16(ax, sy);
-}            for (int j = 0; j < m_block_size; ++j) {
+            for (int j = 0; j < m_block_size; ++j) {
                 wb[j] = kEps;
             }
         }
