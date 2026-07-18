@@ -1006,21 +1006,6 @@ inline void prepare_q4_0_quants_avx2(const uint8_t * qs, __m256i * v, const __m2
     v[7] = _mm256_and_si256(_mm256_srli_epi16(bits4, 4), m4);
 }
 
-inline void prepare_q4_0_quants_avx2(const uint8_t * qs, __m256i * v, const __m256i& m4) {
-    auto bits1 = _mm256_loadu_si256((const __m256i *)qs+0);
-    auto bits2 = _mm256_loadu_si256((const __m256i *)qs+1);
-    auto bits3 = _mm256_loadu_si256((const __m256i *)qs+2);
-    auto bits4 = _mm256_loadu_si256((const __m256i *)qs+3);
-    v[0] = _mm256_and_si256(bits1, m4);
-    v[1] = _mm256_and_si256(bits2, m4);
-    v[2] = _mm256_and_si256(bits3, m4);
-    v[3] = _mm256_and_si256(bits4, m4);
-    v[4] = _mm256_and_si256(_mm256_srli_epi16(bits1, 4), m4);
-    v[5] = _mm256_and_si256(_mm256_srli_epi16(bits2, 4), m4);
-    v[6] = _mm256_and_si256(_mm256_srli_epi16(bits3, 4), m4);
-    v[7] = _mm256_and_si256(_mm256_srli_epi16(bits4, 4), m4);
-}
-
 inline __m256i accum_q4_0_quants(const __m256i * v, const int8_t * qs) {
     auto y4l = _mm_loadu_si128((const __m128i*)qs+0);
     auto y4h = _mm_loadu_si128((const __m128i*)qs+1);
