@@ -2244,6 +2244,7 @@ GGML_TABLE_END()
 GGML_TABLE_BEGIN(int8_t, kvalues_mxfp4, 16)
     0, 1, 2, 3, 4, 6, 8, 12, 0, -1, -2, -3, -4, -6, -8, -12,
 GGML_TABLE_END()
+#define kvalues_mxfp4 kvalues_fp4
 
 // precomputed f32 table for e8m0 half (1 KB)
 // defined in ggml-cpu.c, initialized in ggml_cpu_init()
