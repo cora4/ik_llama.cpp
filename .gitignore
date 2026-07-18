@@ -65,7 +65,7 @@ lcov-report/
 
 # CI
 
-!/.github/workflows/*.yml
+# !/.github/workflows/*.yml
 
 # Models
 
