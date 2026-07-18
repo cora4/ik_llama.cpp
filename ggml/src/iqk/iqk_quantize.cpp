@@ -41,6 +41,12 @@ inline int nearest_int(float fval) {
     return (i & 0x007fffff) - 0x00400000;
 }
 
+static inline __m256i mul_add_epi8(const __m256i x, const __m256i y) {
+    const __m256i ax = _mm256_sign_epi8(x, x);
+    const __m256i sy = _mm256_sign_epi8(y, x);
+    return _mm256_maddubs_epi16(ax, sy);
+}
+
 typedef void (*quantize_func_t)(const float * src, void * qdata, int n_per_row, const float * imatrix, const quantize_user_data * user_data);
 
 struct QHelper {
@@ -67,7 +73,11 @@ struct QHelper {
                 sumwx += wb[j]*std::abs(xb[j]);
             }
             if (sumw2 > m_block_size*kEps2 && sumx2 > m_block_size*kEps2 && sumwx > m_block_size*kEps2) continue;
-            for (int j = 0; j < m_block_size; ++j) {
+static inline __m256i mul_add_epi8(const __m256i x, const __m256i y) {
+    const __m256i ax = _mm256_sign_epi8(x, x);
+    const __m256i sy = _mm256_sign_epi8(y, x);
+    return _mm256_maddubs_epi16(ax, sy);
+}            for (int j = 0; j < m_block_size; ++j) {
                 wb[j] = kEps;
             }
         }
@@ -4155,6 +4165,11 @@ void quantize_row_q8_K128(const float * x, void * vy, int64_t k) {
 // ============================== MXFP4
 
 namespace {
+static inline __m256i mul_add_epi8(const __m256i x, const __m256i y) {
+    const __m256i ax = _mm256_sign_epi8(x, x);
+    const __m256i sy = _mm256_sign_epi8(y, x);
+    return _mm256_maddubs_epi16(ax, sy);
+}
 inline int best_index_mxfp4(float d, const int8_t * values, float x) {
     float best = std::abs(x - d*values[0]);
     int index = 0;
