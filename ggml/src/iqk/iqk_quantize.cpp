@@ -4261,7 +4261,7 @@ void  vec_dot_mxfp4_q8_0_x4(int n, float * s, size_t bs, const void * vx, size_t
     GGML_UNUSED(bs);
     GGML_UNUSED(bx);
     GGML_UNUSED(by);
-    const block_mxfp4 * x = (const block_mxfp4 *) = vx;
+    const block_mxfp4 * x = (const block_mxfp4 *) vx;
     const block_q8_0 * y = (const block_q8_0 *) vy;
 
     const int nb = n / QK_MXFP4;
