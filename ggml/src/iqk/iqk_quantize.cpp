@@ -41,12 +41,6 @@ inline int nearest_int(float fval) {
     return (i & 0x007fffff) - 0x00400000;
 }
 
-static inline __m256i mul_add_epi8(const __m256i x, const __m256i y) {
-    const __m256i ax = _mm256_sign_epi8(x, x);
-    const __m256i sy = _mm256_sign_epi8(y, x);
-    return _mm256_maddubs_epi16(ax, sy);
-}
-
 typedef void (*quantize_func_t)(const float * src, void * qdata, int n_per_row, const float * imatrix, const quantize_user_data * user_data);
 
 struct QHelper {
