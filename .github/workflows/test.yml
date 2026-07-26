@@ -31,7 +31,7 @@ jobs:
 
     - name: Extract Binaries
       run: |
-        unzip -o llama-latest-bin-ubuntu-x64.zip -d /tmp/ || unzip -o llama-latest-bin-ubuntu-x64-avx2.zip -d /tmp/ 
+        unzip -o llama-latest-bin-ubuntu-x64-avx512.zip -d /tmp/ || unzip -o llama-latest-bin-ubuntu-x64-avx2.zip -d /tmp/ 
         tar --no-overwrite-dir -xf llama-prism-b9596-9fcaed7-bin-ubuntu-x64.tar.gz -C /tmp/ || true
 
     - name: System Information
