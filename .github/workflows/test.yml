@@ -35,19 +35,57 @@ jobs:
         echo "Testing Llama Prism:"
         /tmp/llama-prism-b9596-9fcaed7/llama-server --version
 
-    - name: Quantise Model
+    - name: Quantise Model Q4_0
+      run: |          
+        /tmp/llama-prism-b9596-9fcaed7/llama-quantize \
+          --allow-requantize --token-embedding-type Q4_0 \
+          --tensor-type attn_k=q4_0 --tensor-type attn_q=q4_0 --tensor-type attn_v=q4_0 \
+          --tensor-type ffn_down=q4_0 --tensor-type ffn_gate=q4_0 --tensor-type ffn_up=q4_0 \
+          --tensor-type attn_output=q4_0 qwen3-1.7B-Q2_0.gguf /tmp/qwen3-1.7B-Q4_0.gguf q4_0
+
+    - name: Quantise Model IQ4_NL
       run: |
         /tmp/llama-prism-b9596-9fcaed7/llama-quantize \
           --allow-requantize --token-embedding-type iq4_nl \
           --tensor-type attn_k=iq4_nl --tensor-type attn_q=iq4_nl --tensor-type attn_v=iq4_nl \
           --tensor-type ffn_down=iq4_nl --tensor-type ffn_gate=iq4_nl --tensor-type ffn_up=iq4_nl \
-          --tensor-type attn_output=iq4_nl qwen3-1.7B-Q2_0.gguf /tmp/qwen3-1.7B-IQ4_NL.gguf iq4_nl
+          --tensor-type attn_output=iq4_nl /tmp/qwen3-1.7B-Q4_0.gguf /tmp/qwen3-1.7B-IQ4_NL.gguf iq4_nl
 
-    - name: Benchmark Models (Prism)
+    - name: Quantise Model MXFP4
+      run: |
+        /tmp/llama-prism-b9596-9fcaed7/llama-quantize \
+          --allow-requantize --token-embedding-type mxfp4 \
+          --tensor-type attn_k=mxfp4 --tensor-type attn_q=mxfp4 --tensor-type attn_v=mxfp4 \
+          --tensor-type ffn_down=mxfp4 --tensor-type ffn_gate=mxfp4 --tensor-type ffn_up=mxfp4 \
+          --tensor-type attn_output=mxfp4 /tmp/qwen3-1.7B-Q4_0.gguf /tmp/qwen3-1.7B-MXFP4.gguf 38
+
+    - name: Benchmark Models (Prism) Q4_0
+      run: |
+        echo "Benchmarking Quantised Model (Prism):"
+        /tmp/llama-prism-b9596-9fcaed7/llama-bench -m /tmp/qwen3-1.7B-Q4_0.gguf
+
+    - name: Benchmark Models (Prism) IQ4_NL
       run: |
         echo "Benchmarking Quantised Model (Prism):"
         /tmp/llama-prism-b9596-9fcaed7/llama-bench -m /tmp/qwen3-1.7B-IQ4_NL.gguf
-    - name: Benchmark Models (latest)
+    
+    - name: Benchmark Models (Prism) MXFP4
+      run: |
+        echo "Benchmarking Quantised Model (Prism):"
+        /tmp/llama-prism-b9596-9fcaed7/llama-bench -m /tmp/qwen3-1.7B-MXFP4.gguf
+        
+
+    - name: Benchmark Models (latest) Q4_0
+      run: |
+        echo "Benchmarking Quantised Model (Latest):"
+        /tmp/llama-latest/llama-bench -m /tmp/qwen3-1.7B-Q4_0.gguf
+
+    - name: Benchmark Models (latest) IQ4_NL
       run: |
         echo "Benchmarking Quantised Model (Latest):"
         /tmp/llama-latest/llama-bench -m /tmp/qwen3-1.7B-IQ4_NL.gguf
+
+    - name: Benchmark Models (latest) MXFP4
+      run: |
+        echo "Benchmarking Quantised Model (Latest):"
+        /tmp/llama-latest/llama-bench -m /tmp/qwen3-1.7B-MXFP4.gguf
