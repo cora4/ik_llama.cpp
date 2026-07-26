@@ -38,6 +38,7 @@ jobs:
         echo "Current Directory: $PWD"
         echo "CPU Cores:"
         nproc
+        lscpu
         cat /proc/cpuinfo
 
     - name: Verify Binary Versions
