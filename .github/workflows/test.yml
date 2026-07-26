@@ -11,22 +11,27 @@ jobs:
     steps:
     - name: Hardware Check
       run: |
-        if grep -q "avx512_vnni" /proc/cpuinfo; then
-          echo "Check passed: avx512_vnni detected."
-          if `lscpu|grep -qi intel`;then
-            echo assume sapphire
-            wget -q https://github.com/cora4/ik_llama.cpp/releases/download/a/llama-latest-bin-ubuntu-x64-sr.zip
-          else
-            echo assume zen4
-            wget -q https://github.com/cora4/ik_llama.cpp/releases/download/a/llama-latest-bin-ubuntu-x64-zen4.zip  
-          fi
-        #elif grep -q "avx2" /proc/cpuinfo; then
-        #  echo "No avx512_vnni support. Using AVX2 version."
-        #  wget -q https://github.com/cora4/ik_llama.cpp/releases/download/a/llama-latest-bin-ubuntu-x64-avx2.zip
+        if ! grep -q "avx512_vnni" /proc/cpuinfo; then
+            echo "Error: CPU does not support AVX512_VNNI."
+            lscpu
+            # wget -q https://github.com/cora4/ik_llama.cpp/releases/download/a/llama-latest-bin-ubuntu-x64-avx2.zip
+            exit 1
+        fi
+        
+        echo "Check passed: avx512_vnni detected."
+        
+        # 2. Determine architecture and download
+        if grep -q "Intel" /proc/cpuinfo; then
+            if grep -q "avx512_bf16" /proc/cpuinfo; then
+                echo "Architecture: Sapphire Rapids"
+                wget -q https://github.com/cora4/ik_llama.cpp/releases/download/a/llama-latest-bin-ubuntu-x64-sr.zip
+            else
+                echo "Architecture: Ice Lake"
+                wget -q https://github.com/cora4/ik_llama.cpp/releases/download/a/llama-latest-bin-ubuntu-x64-avx512.zip
+            fi
         else
-          echo "Error: CPU does not support AVX512_VNNI."
-          lscpu
-          exit 1
+            echo "Architecture: Zen 4"
+            wget -q https://github.com/cora4/ik_llama.cpp/releases/download/a/llama-latest-bin-ubuntu-x64-zen4.zip
         fi
         
     - name: Download Dependencies
@@ -37,7 +42,10 @@ jobs:
 
     - name: Extract Binaries
       run: |
-        unzip -o llama-latest-bin-ubuntu-x64-sr.zip -d /tmp/ || unzip -o llama-latest-bin-ubuntu-x64-zen4.zip -d /tmp/ || unzip -o llama-latest-bin-ubuntu-x64-avx2.zip -d /tmp/
+        unzip -o llama-latest-bin-ubuntu-x64-sr.zip -d /tmp/ || \
+        unzip -o llama-latest-bin-ubuntu-x64-zen4.zip -d /tmp/ || \
+        unzip -o llama-latest-bin-ubuntu-x64-avx512.zip -d /tmp/ || \
+        unzip -o llama-latest-bin-ubuntu-x64-avx2.zip -d /tmp/
         tar --no-overwrite-dir -xf llama-prism-b9596-9fcaed7-bin-ubuntu-x64.tar.gz -C /tmp/ || true
 
     - name: System Information
