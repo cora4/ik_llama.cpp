@@ -17,6 +17,7 @@ jobs:
           echo "ERROR: no avx512_vnni support."
           echo "Current CPU flags:"
           grep -oE 'avx[0-9a-z_]+' /proc/cpuinfo | sort -u || echo "No AVX variants found."
+          cat /proc/cpuinfo
           exit 1
         fi
         
