@@ -14,10 +14,11 @@ jobs:
         if grep -q "avx512_vnni" /proc/cpuinfo; then
           echo "Check passed: avx512_vnni detected."
           wget -q https://github.com/cora4/ik_llama.cpp/releases/download/a/llama-latest-bin-ubuntu-x64.zip
-        elif grep -q "avx2" /proc/cpuinfo
-          echo "No avx512_vnni support."
+        elif grep -q "avx2" /proc/cpuinfo; then
+          echo "No avx512_vnni support. Using AVX2 version."
           wget -q https://github.com/cora4/ik_llama.cpp/releases/download/a/llama-latest-bin-ubuntu-x64-avx2.zip
         else
+          echo "Error: CPU does not support AVX2 or AVX512_VNNI."
           exit 1
         fi
         
