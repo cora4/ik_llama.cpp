@@ -9,6 +9,17 @@ jobs:
     runs-on: ubuntu-24.04
 
     steps:
+    - name: Pre-flight Hardware Check
+      run: |
+        if grep -q "avx512_vnni" /proc/cpuinfo; then
+          echo "Check passed: avx512_vnni detected."
+        else
+          echo "ERROR: no avx512_vnni support."
+          echo "Current CPU flags:"
+          grep -oE 'avx[0-9a-z_]+' /proc/cpuinfo | sort -u || echo "No AVX variants found."
+          exit 1
+        fi
+        
     - name: Download Dependencies
       id: dl
       run: |
