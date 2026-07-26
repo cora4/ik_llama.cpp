@@ -19,6 +19,7 @@ jobs:
         #  wget -q https://github.com/cora4/ik_llama.cpp/releases/download/a/llama-latest-bin-ubuntu-x64-avx2.zip
         else
           echo "Error: CPU does not support AVX512_VNNI."
+          lscpu
           exit 1
         fi
         
