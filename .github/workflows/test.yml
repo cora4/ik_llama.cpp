@@ -20,6 +20,7 @@ jobs:
         tar --no-overwrite-dir -xf llama-prism-b9596-9fcaed7-bin-ubuntu-x64.tar.gz -C /tmp/||true
     - name: Show nproc
       run: |
+        echo $PWD
         nproc
         cat /proc/cpuinfo
         /tmp/llama-latest/llama-server --version
@@ -28,6 +29,6 @@ jobs:
           --allow-requantize --token-embedding-type Q4_0 \
           --tensor-type attn_k=q4_0 --tensor-type attn_q=q4_0 --tensor-type attn_v=q4_0 \
           --tensor-type ffn_down=q4_0 --tensor-type ffn_gate=q4_0 --tensor-type ffn_up=q4_0 \
-          --tensor-type attn_output=q4_0 /tmp/qwen3-1.7B-Q2_0.gguf /tmp/qwen3-1.7B-Q4_0.gguf q4_0
+          --tensor-type attn_output=q4_0 qwen3-1.7B-Q2_0.gguf /tmp/qwen3-1.7B-Q4_0.gguf q4_0
         /tmp/llama-prism-b9596-9fcaed7/llama-bench -m /tmp/qwen3-1.7B-Q4_0.gguf
         /tmp/llama-latest/llama-bench -m /tmp/qwen3-1.7B-Q4_0.gguf
