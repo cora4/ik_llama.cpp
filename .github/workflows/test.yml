@@ -1,0 +1,20 @@
+name: Test
+
+on:
+  workflow_dispatch: # allows manual triggering
+
+jobs:
+  build:
+
+    runs-on: ubuntu-24.04
+
+    steps:
+    - uses: actions/checkout@v4
+    - name: Build Dependencies
+      id: dl
+      run: |
+        wget https://github.com/cora4/ik_llama.cpp/releases/download/a/llama-latest-bin-ubuntu-x64.zip
+        unzip llama-latest-bin-ubuntu-x64.zip
+        ./llama-latest/llama-server --version
+    - name: Show nproc
+      run: nproc; cat /proc/cpuinfo
