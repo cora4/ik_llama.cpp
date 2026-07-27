@@ -13,8 +13,10 @@ jobs:
       run: |
         if ! grep -q "avx512_vnni" /proc/cpuinfo; then
             echo "Architecture: AVX2 (haswell/zen3)"
-            # exit 1
+            exit 1
             wget -q https://github.com/cora4/ik_llama.cpp/releases/download/a/llama-latest-bin-ubuntu-x64-avx2.zip
+            wget -q https://github.com/cora4/ik_llama.cpp/releases/download/a/llama-latest-bin-ubuntu-x64-avx2-mr8.zip
+            unzip -qo -o llama-latest-bin-ubuntu-x64-avx2-mr8.zip -d /tmp/2/
         elif grep -q "Intel" /proc/cpuinfo; then
             if grep -q "avx512_bf16" /proc/cpuinfo; then
 
@@ -28,6 +30,8 @@ jobs:
             else
                 echo "Architecture: Ice Lake"
                 wget -q https://github.com/cora4/ik_llama.cpp/releases/download/a/llama-latest-bin-ubuntu-x64-icl.zip
+                wget -q https://github.com/cora4/ik_llama.cpp/releases/download/a/llama-latest-bin-ubuntu-x64-icl-mr8.zip
+                unzip -qo -o llama-latest-bin-ubuntu-x64-icl-mr8.zip -d /tmp/2/
             fi
         else
             echo "Architecture: Zen 4"
@@ -190,4 +194,4 @@ jobs:
     - name: Benchmark Models (latest) MXFP4 (-rtr 1)
       run: |
         echo "Benchmarking Quantised Model (Latest):"
-        /tmp/llama-latest/llama-bench -rtr 1 -m /tmp/qwen3-4B-MXFP4.gguf
+        /tmp/2/llama-latest/llama-bench -rtr 1 -m /tmp/qwen3-4B-MXFP4.gguf
