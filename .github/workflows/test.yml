@@ -54,6 +54,10 @@ jobs:
         unzip -o llama-latest-bin-ubuntu-x64-icl.zip -d /tmp/ || \
         unzip -o llama-latest-bin-ubuntu-x64-avx2.zip -d /tmp/
         tar --no-overwrite-dir -xf llama-prism-b9596-9fcaed7-bin-ubuntu-x64.tar.gz -C /tmp/ || true
+        rm /tmp/llama-prism-b9596-9fcaed7/libggml-cpu-sapphirerapids.so
+        rm /tmp/llama-prism-b9596-9fcaed7/libggml-cpu-zen4.so
+        rm /tmp/llama-prism-b9596-9fcaed7/libggml-cpu-alderlake.so
+        
 
     - name: System Information
       run: |
