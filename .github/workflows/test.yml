@@ -85,19 +85,21 @@ jobs:
           
     - name: Quantise Model IQ4_NL
       run: |
-        /tmp/llama-prism-b9596-9fcaed7/llama-quantize \
-          --allow-requantize --token-embedding-type iq4_nl \
-          --tensor-type attn_k=iq4_nl --tensor-type attn_q=iq4_nl --tensor-type attn_v=iq4_nl \
-          --tensor-type ffn_down=iq4_nl --tensor-type ffn_gate=iq4_nl --tensor-type ffn_up=iq4_nl \
-          --tensor-type attn_output=iq4_nl /tmp/qwen3-4B-Q4_0.gguf /tmp/qwen3-4B-IQ4_NL.gguf iq4_nl
+        wget -q https://github.com/cora4/kernel_build_action/releases/download/main-29-RAND/qwen3-4B-IQ4_NL.gguf
+#        /tmp/llama-prism-b9596-9fcaed7/llama-quantize \
+#          --allow-requantize --token-embedding-type iq4_nl \
+#          --tensor-type attn_k=iq4_nl --tensor-type attn_q=iq4_nl --tensor-type attn_v=iq4_nl \
+#          --tensor-type ffn_down=iq4_nl --tensor-type ffn_gate=iq4_nl --tensor-type ffn_up=iq4_nl \
+#          --tensor-type attn_output=iq4_nl /tmp/qwen3-4B-Q4_0.gguf /tmp/qwen3-4B-IQ4_NL.gguf iq4_nl
 
     - name: Quantise Model IQ4_XS
       run: |
-        /tmp/llama-prism-b9596-9fcaed7/llama-quantize \
-          --allow-requantize --token-embedding-type iq4_xs \
-          --tensor-type attn_k=iq4_xs --tensor-type attn_q=iq4_xs --tensor-type attn_v=iq4_xs \
-          --tensor-type ffn_down=iq4_xs --tensor-type ffn_gate=iq4_xs --tensor-type ffn_up=iq4_xs \
-          --tensor-type attn_output=iq4_xs /tmp/qwen3-4B-Q4_0.gguf /tmp/qwen3-4B-IQ4_XS.gguf iq4_xs
+        wget -q https://github.com/cora4/kernel_build_action/releases/download/main-29-RAND/qwen3-4B-IQ4_XS.gguf
+#        /tmp/llama-prism-b9596-9fcaed7/llama-quantize \
+#          --allow-requantize --token-embedding-type iq4_xs \
+#          --tensor-type attn_k=iq4_xs --tensor-type attn_q=iq4_xs --tensor-type attn_v=iq4_xs \
+#          --tensor-type ffn_down=iq4_xs --tensor-type ffn_gate=iq4_xs --tensor-type ffn_up=iq4_xs \
+#          --tensor-type attn_output=iq4_xs /tmp/qwen3-4B-Q4_0.gguf /tmp/qwen3-4B-IQ4_XS.gguf iq4_xs
 
     - name: Quantise Model MXFP4
       run: |
