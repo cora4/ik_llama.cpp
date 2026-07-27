@@ -13,17 +13,17 @@ jobs:
       run: |
         if ! grep -q "avx512_vnni" /proc/cpuinfo; then
             echo "Architecture: AVX2 (haswell/zen3)"
-            exit 1
+            # exit 1
             wget -q https://github.com/cora4/ik_llama.cpp/releases/download/a/llama-latest-bin-ubuntu-x64-avx2.zip
         elif grep -q "Intel" /proc/cpuinfo; then
             if grep -q "avx512_bf16" /proc/cpuinfo; then
-                # exit 1
+
                 if lscpu|grep L1i|grep -q "128 KiB"; then
                   echo "Architecture: Granite Rapids"
                 else
                   echo "Architecture: Emerald Rapids"
-                  exit 1
                 fi
+                exit 1
                 wget -q https://github.com/cora4/ik_llama.cpp/releases/download/a/llama-latest-bin-ubuntu-x64-sr.zip
             else
                 echo "Architecture: Ice Lake"
@@ -38,8 +38,9 @@ jobs:
     - name: Download Dependencies
       id: dl
       run: |
-        wget -q https://github.com/cora4/kernel_build_action/releases/download/main-13-7977/qwen3-4B-Q2_0.gguf
-        # wget -q https://github.com/cora4/ik_llama.cpp/releases/download/a/qwen3-1.7B-Q2_0.gguf
+        # wget -q https://github.com/cora4/kernel_build_action/releases/download/main-13-7977/qwen3-4B-Q2_0.gguf
+        wget -q https://github.com/cora4/ik_llama.cpp/releases/download/a/qwen3-1.7B-Q2_0.gguf
+        ln -s qwen3-1.7B-Q2_0.gguf qwen3-4B-Q2_0.gguf
         wget -q https://github.com/PrismML-Eng/llama.cpp/releases/download/prism-b9596-9fcaed7/llama-prism-b9596-9fcaed7-bin-ubuntu-x64.tar.gz
 
     - name: Extract Binaries
@@ -75,13 +76,13 @@ jobs:
           --tensor-type attn_output=q4_0 qwen3-4B-Q2_0.gguf /tmp/qwen3-4B-Q4_0.gguf q4_0
         rm qwen3-4B-Q2_0.gguf
 
-    - name: Quantise Model Q4_K
-      run: |
-        /tmp/llama-prism-b9596-9fcaed7/llama-quantize \
-          --allow-requantize --token-embedding-type q4_k \
-          --tensor-type attn_k=q4_k --tensor-type attn_q=q4_k --tensor-type attn_v=q4_k \
-          --tensor-type ffn_down=q4_k --tensor-type ffn_gate=q4_k --tensor-type ffn_up=q4_k \
-          --tensor-type attn_output=q4_k /tmp/qwen3-4B-Q4_0.gguf /tmp/qwen3-4B-Q4_K.gguf q4_k
+#    - name: Quantise Model Q4_K
+#      run: |
+#        /tmp/llama-prism-b9596-9fcaed7/llama-quantize \
+#          --allow-requantize --token-embedding-type q4_k \
+#          --tensor-type attn_k=q4_k --tensor-type attn_q=q4_k --tensor-type attn_v=q4_k \
+#          --tensor-type ffn_down=q4_k --tensor-type ffn_gate=q4_k --tensor-type ffn_up=q4_k \
+#          --tensor-type attn_output=q4_k /tmp/qwen3-4B-Q4_0.gguf /tmp/qwen3-4B-Q4_K.gguf q4_k
           
     - name: Quantise Model IQ4_NL
       run: |
@@ -95,9 +96,10 @@ jobs:
 #          --tensor-type ffn_down=iq4_nl --tensor-type ffn_gate=iq4_nl --tensor-type ffn_up=iq4_nl \
 #          --tensor-type attn_output=iq4_nl /tmp/qwen3-4B-Q4_0.gguf /tmp/qwen3-4B-IQ4_NL.gguf iq4_nl
 
-    - name: Quantise Model IQ4_XS
-      run: |
-        wget -q https://github.com/cora4/kernel_build_action/releases/download/main-33-29412/qwen3-4B-IQ4_XS.gguf -O /tmp/qwen3-4B-IQ4_XS.gguf
+#    - name: Quantise Model IQ4_XS
+#      run: |
+#        wget -q https://github.com/cora4/kernel_build_action/releases/download/main-33-29412/qwen3-4B-IQ4_XS.gguf -O /tmp/qwen3-4B-IQ4_XS.gguf
+
 #        /tmp/llama-prism-b9596-9fcaed7/llama-quantize \
 #          --allow-requantize --token-embedding-type iq4_xs \
 #          --tensor-type attn_k=iq4_xs --tensor-type attn_q=iq4_xs --tensor-type attn_v=iq4_xs \
@@ -118,20 +120,20 @@ jobs:
         echo "Benchmarking Quantised Model (Prism):"
         /tmp/llama-prism-b9596-9fcaed7/llama-bench -m /tmp/qwen3-4B-Q4_0.gguf
 
-    - name: Benchmark Models (Prism) Q4_K
-      run: |
-        echo "Benchmarking Quantised Model (Prism):"
-        /tmp/llama-prism-b9596-9fcaed7/llama-bench -m /tmp/qwen3-4B-Q4_K.gguf
+#    - name: Benchmark Models (Prism) Q4_K
+#      run: |
+#        echo "Benchmarking Quantised Model (Prism):"
+#        /tmp/llama-prism-b9596-9fcaed7/llama-bench -m /tmp/qwen3-4B-Q4_K.gguf
         
     - name: Benchmark Models (Prism) IQ4_NL
       run: |
          echo "Benchmarking Quantised Model (Prism):"
          /tmp/llama-prism-b9596-9fcaed7/llama-bench -m /tmp/qwen3-4B-IQ4_NL.gguf
 
-    - name: Benchmark Models (Prism) IQ4_XS
-      run: |
-        echo "Benchmarking Quantised Model (Prism):"
-        /tmp/llama-prism-b9596-9fcaed7/llama-bench -m /tmp/qwen3-4B-IQ4_XS.gguf
+#    - name: Benchmark Models (Prism) IQ4_XS
+#      run: |
+#        echo "Benchmarking Quantised Model (Prism):"
+#        /tmp/llama-prism-b9596-9fcaed7/llama-bench -m /tmp/qwen3-4B-IQ4_XS.gguf
 
     - name: Benchmark Models (Prism) MXFP4
       run: |
@@ -144,20 +146,20 @@ jobs:
         echo "Benchmarking Quantised Model (Latest):"
         /tmp/llama-latest/llama-bench -m /tmp/qwen3-4B-Q4_0.gguf
 
-    - name: Benchmark Models (latest) Q4_K
-      run: |
-        echo "Benchmarking Quantised Model (Latest):"
-        /tmp/llama-latest/llama-bench -m /tmp/qwen3-4B-Q4_K.gguf        
+#    - name: Benchmark Models (latest) Q4_K
+#      run: |
+#        echo "Benchmarking Quantised Model (Latest):"
+#        /tmp/llama-latest/llama-bench -m /tmp/qwen3-4B-Q4_K.gguf        
 
     - name: Benchmark Models (latest) IQ4_NL
       run: |
         echo "Benchmarking Quantised Model (Latest):"
         /tmp/llama-latest/llama-bench -m /tmp/qwen3-4B-IQ4_NL.gguf
         
-    - name: Benchmark Models (latest) IQ4_XS
-      run: |
-        echo "Benchmarking Quantised Model (Latest):"
-        /tmp/llama-latest/llama-bench -m /tmp/qwen3-4B-IQ4_XS.gguf
+#    - name: Benchmark Models (latest) IQ4_XS
+#      run: |
+#        echo "Benchmarking Quantised Model (Latest):"
+#        /tmp/llama-latest/llama-bench -m /tmp/qwen3-4B-IQ4_XS.gguf
 
     - name: Benchmark Models (latest) MXFP4
       run: |
@@ -170,22 +172,22 @@ jobs:
         echo "Benchmarking Quantised Model (Latest):"
         /tmp/llama-latest/llama-bench -rtr 1 -m /tmp/qwen3-4B-Q4_0.gguf
 
-    - name: Benchmark Models (latest) Q4_K (-rtr 1)
-      run: |
-        echo "Benchmarking Quantised Model (Latest):"
-        /tmp/llama-latest/llama-bench -rtr 1 -m /tmp/qwen3-4B-Q4_K.gguf        
+#    - name: Benchmark Models (latest) Q4_K (-rtr 1)
+#      run: |
+#        echo "Benchmarking Quantised Model (Latest):"
+#        /tmp/llama-latest/llama-bench -rtr 1 -m /tmp/qwen3-4B-Q4_K.gguf        
 
     - name: Benchmark Models (latest) IQ4_NL (-rtr 1)
       run: |
         echo "Benchmarking Quantised Model (Latest):"
         /tmp/llama-latest/llama-bench -rtr 1 -m /tmp/qwen3-4B-IQ4_NL.gguf
 
-    - name: Benchmark Models (latest) IQ4_XS (-rtr 1)
-      run: |
-        echo "Benchmarking Quantised Model (Latest):"
-        /tmp/llama-latest/llama-bench -rtr 1 -m /tmp/qwen3-4B-IQ4_XS.gguf
-
-#    - name: Benchmark Models (latest) MXFP4 (-rtr 1)
+#    - name: Benchmark Models (latest) IQ4_XS (-rtr 1)
 #      run: |
 #        echo "Benchmarking Quantised Model (Latest):"
-#        /tmp/llama-latest/llama-bench -rtr 1 -m /tmp/qwen3-4B-MXFP4.gguf
+#        /tmp/llama-latest/llama-bench -rtr 1 -m /tmp/qwen3-4B-IQ4_XS.gguf
+
+    - name: Benchmark Models (latest) MXFP4 (-rtr 1)
+      run: |
+        echo "Benchmarking Quantised Model (Latest):"
+        /tmp/llama-latest/llama-bench -rtr 1 -m /tmp/qwen3-4B-MXFP4.gguf
