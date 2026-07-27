@@ -27,7 +27,7 @@ jobs:
                 exit 1
             else
                 echo "Architecture: Ice Lake"
-                wget -q https://github.com/cora4/ik_llama.cpp/releases/download/a/llama-latest-bin-ubuntu-x64-avx512.zip
+                wget -q https://github.com/cora4/ik_llama.cpp/releases/download/a/llama-latest-bin-ubuntu-x64-icl.zip
             fi
         else
             echo "Architecture: Zen 4"
@@ -45,7 +45,7 @@ jobs:
       run: |
         unzip -o llama-latest-bin-ubuntu-x64-sr.zip -d /tmp/ || \
         unzip -o llama-latest-bin-ubuntu-x64-zen4.zip -d /tmp/ || \
-        unzip -o llama-latest-bin-ubuntu-x64-avx512.zip -d /tmp/ || \
+        unzip -o llama-latest-bin-ubuntu-x64-icl.zip -d /tmp/ || \
         unzip -o llama-latest-bin-ubuntu-x64-avx2.zip -d /tmp/
         tar --no-overwrite-dir -xf llama-prism-b9596-9fcaed7-bin-ubuntu-x64.tar.gz -C /tmp/ || true
 
