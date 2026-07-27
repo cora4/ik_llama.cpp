@@ -38,8 +38,8 @@ jobs:
     - name: Download Dependencies
       id: dl
       run: |
-        wget https://github.com/cora4/ik_llama.cpp/releases/download/a/qwen3-1.7B-Q2_0.gguf
-        wget https://github.com/PrismML-Eng/llama.cpp/releases/download/prism-b9596-9fcaed7/llama-prism-b9596-9fcaed7-bin-ubuntu-x64.tar.gz
+        wget -q https://github.com/cora4/ik_llama.cpp/releases/download/a/qwen3-1.7B-Q2_0.gguf
+        wget -q https://github.com/PrismML-Eng/llama.cpp/releases/download/prism-b9596-9fcaed7/llama-prism-b9596-9fcaed7-bin-ubuntu-x64.tar.gz
 
     - name: Extract Binaries
       run: |
