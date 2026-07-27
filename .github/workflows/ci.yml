@@ -34,8 +34,8 @@ jobs:
         run: |
           sudo apt-get update
           sudo apt-get install -y gcc-14-x86-64-linux-gnu g++-14-x86-64-linux-gnu patchelf
-          echo "CC=x86_64-linux-gnu-gcc-14 -march=icelake-client" >> "$GITHUB_ENV"
-          echo "CXX=x86_64-linux-gnu-g++-14 -march=icelake-client" >> "$GITHUB_ENV"
+          echo "CC=x86_64-linux-gnu-gcc-14 -march=tigerlake" >> "$GITHUB_ENV"
+          echo "CXX=x86_64-linux-gnu-g++-14 -march=tigerlake" >> "$GITHUB_ENV"
       - name: Swap Endianness
         id: endianness
         if: ${{ matrix.build == 's390x' }}
