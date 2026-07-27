@@ -19,20 +19,20 @@ jobs:
         elif grep -q "Intel" /proc/cpuinfo; then
             if grep -q "avx512_bf16" /proc/cpuinfo; then
                 if lscpu|grep L1i|grep -q "128 KiB"; then
-                echo "Architecture: Granite Rapids"
+                  echo "Architecture: Granite Rapids"
+                  exit 1
                 else
-                echo "Architecture: Emerald Rapids"
+                  echo "Architecture: Emerald Rapids"
                 fi
-                # wget -q https://github.com/cora4/ik_llama.cpp/releases/download/a/llama-latest-bin-ubuntu-x64-sr.zip
-                exit 1
+                wget -q https://github.com/cora4/ik_llama.cpp/releases/download/a/llama-latest-bin-ubuntu-x64-sr.zip
             else
                 echo "Architecture: Ice Lake"
                 wget -q https://github.com/cora4/ik_llama.cpp/releases/download/a/llama-latest-bin-ubuntu-x64-icl.zip
             fi
         else
             echo "Architecture: Zen 4"
-            wget -q https://github.com/cora4/ik_llama.cpp/releases/download/a/llama-latest-bin-ubuntu-x64-zen4.zip
-            # exit 1
+            # wget -q https://github.com/cora4/ik_llama.cpp/releases/download/a/llama-latest-bin-ubuntu-x64-zen4.zip
+            exit 1
         fi
         
     - name: Download Dependencies
