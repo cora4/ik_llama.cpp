@@ -57,6 +57,7 @@ jobs:
         rm /tmp/llama-prism-b9596-9fcaed7/libggml-cpu-sapphirerapids.so
         rm /tmp/llama-prism-b9596-9fcaed7/libggml-cpu-zen4.so
         rm /tmp/llama-prism-b9596-9fcaed7/libggml-cpu-alderlake.so
+        rm /tmp/llama-prism-b9596-9fcaed7/libggml-cpu-cooperlake.so
         
 
     - name: System Information
