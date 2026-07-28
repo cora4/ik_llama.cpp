@@ -75,13 +75,6 @@ jobs:
           cd build2
           zip -r0XD /tmp/llama-latest-bin-ubuntu-icl.zip *
 
-#      - name: Upload Build Artifact
-#        if: ${{ always() && steps.cmake_build.outcome == 'success' }}
-#        uses: actions/upload-artifact@v6
-#        with:
-#          name: llama-latest-bin-ubuntu-x64
-#          path: build2/
-
        - name: Create Release
          run: |
            TAG=icl-${{ github.run_number }}-$RANDOM
