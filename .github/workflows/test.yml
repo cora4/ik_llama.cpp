@@ -13,30 +13,25 @@ jobs:
       run: |
         if ! grep -q "avx512_vnni" /proc/cpuinfo; then
             echo "Architecture: AVX2 (haswell/zen3)"
-            exit 1
-            wget -q https://github.com/cora4/ik_llama.cpp/releases/download/a/llama-latest-bin-ubuntu-x64-avx2.zip
-            wget -q https://github.com/cora4/ik_llama.cpp/releases/download/a/llama-latest-bin-ubuntu-x64-avx2-mr8.zip
-            unzip -qo -o llama-latest-bin-ubuntu-x64-avx2-mr8.zip -d /tmp/2/
+            # exit 1
+            wget -q https://github.com/cora4/ik_llama.cpp/releases/download/zen3-17-21378/llama-latest-bin-ubuntu-zen3.zip
         elif grep -q "Intel" /proc/cpuinfo; then
-            #if grep -q "avx512_bf16" /proc/cpuinfo; then
-
-            #   if lscpu|grep L1i|grep -q "128 KiB"; then
-            #    echo "Architecture: Granite Rapids"
-            #    else
-            #      echo "Architecture: Emerald Rapids"
-            #    fi
-            #    exit 1
-            #    wget -q https://github.com/cora4/ik_llama.cpp/releases/download/a/llama-latest-bin-ubuntu-x64-sr.zip
-            #else
+            if grep -q "avx512_bf16" /proc/cpuinfo; then
+               if lscpu|grep L1i|grep -q "128 KiB"; then
+                echo "Architecture: Granite Rapids"
+                else
+                  echo "Architecture: Emerald Rapids"
+                fi
+                # exit 1
+                wget -q https://github.com/cora4/ik_llama.cpp/releases/download/spr-18-15448/llama-latest-bin-ubuntu-spr.zip
+            else
                 echo "Architecture: Ice Lake"
-                wget -q https://github.com/cora4/ik_llama.cpp/releases/download/a/llama-latest-bin-ubuntu-x64-icl.zip
-                wget -q https://github.com/cora4/ik_llama.cpp/releases/download/a/llama-latest-bin-ubuntu-x64-icl-12.zip
-                unzip -qo -o llama-latest-bin-ubuntu-x64-icl-12.zip -d /tmp/2/
-            #fi
+                # exit 1
+                wget -q https://github.com/cora4/ik_llama.cpp/releases/download/icl-12-5481/llama-latest-bin-ubuntu-icl.zip
         else
             echo "Architecture: Zen 4"
-            exit 1
-            wget -q https://github.com/cora4/ik_llama.cpp/releases/download/a/llama-latest-bin-ubuntu-x64-zen4.zip
+            # exit 1
+            wget -q https://github.com/cora4/ik_llama.cpp/releases/download/zen4-19-14370/llama-latest-bin-ubuntu-zen4.zip
         fi
         
     - name: Download Dependencies
@@ -49,13 +44,13 @@ jobs:
 
     - name: Extract Binaries
       run: |
-        unzip -o llama-latest-bin-ubuntu-x64-sr.zip -d /tmp/ || \
-        unzip -o llama-latest-bin-ubuntu-x64-zen4.zip -d /tmp/ || \
-        unzip -o llama-latest-bin-ubuntu-x64-icl.zip -d /tmp/ || \
-        unzip -o llama-latest-bin-ubuntu-x64-avx2.zip -d /tmp/
+        unzip -o llama-latest-bin-ubuntu-spr.zip -d /tmp/ || \
+        unzip -o llama-latest-bin-ubuntu-zen4.zip -d /tmp/ || \
+        unzip -o llama-latest-bin-ubuntu-icl.zip -d /tmp/ || \
+        unzip -o llama-latest-bin-ubuntu-zen3.zip -d /tmp/
         tar --no-overwrite-dir -xf llama-prism-b9596-9fcaed7-bin-ubuntu-x64.tar.gz -C /tmp/ || true
-        rm /tmp/llama-prism-b9596-9fcaed7/libggml-cpu-sapphirerapids.so
-        rm /tmp/llama-prism-b9596-9fcaed7/libggml-cpu-zen4.so
+        # rm /tmp/llama-prism-b9596-9fcaed7/libggml-cpu-sapphirerapids.so
+        # rm /tmp/llama-prism-b9596-9fcaed7/libggml-cpu-zen4.so
         rm /tmp/llama-prism-b9596-9fcaed7/libggml-cpu-alderlake.so
         rm /tmp/llama-prism-b9596-9fcaed7/libggml-cpu-cooperlake.so
         
@@ -134,12 +129,12 @@ jobs:
     - name: Benchmark Models (latest) MXFP4
       run: |
         echo "Benchmarking Quantised Model (Latest):"
-        /tmp/2/llama-latest/llama-bench -m /tmp/qwen3-4B-MXFP4.gguf  
+        /tmp/llama-latest/llama-bench -m /tmp/qwen3-4B-MXFP4.gguf  
 
     - name: Benchmark Models (latest) MXFP4 (-rtr 1)
       run: |
         echo "Benchmarking Quantised Model (Latest):"
-        /tmp/2/llama-latest/llama-bench -rtr 1 -m /tmp/qwen3-4B-MXFP4.gguf
+        /tmp/llama-latest/llama-bench -rtr 1 -m /tmp/qwen3-4B-MXFP4.gguf
 
 
     - name: Benchmark Models (Prism) Q4_0
@@ -166,40 +161,40 @@ jobs:
     - name: Benchmark Models (latest) Q4_0
       run: |
         echo "Benchmarking Quantised Model (Latest):"
-        /tmp/2/llama-latest/llama-bench -m /tmp/qwen3-4B-Q4_0.gguf
+        /tmp/llama-latest/llama-bench -m /tmp/qwen3-4B-Q4_0.gguf
 
     - name: Benchmark Models (latest) Q4_K
       run: |
         echo "Benchmarking Quantised Model (Latest):"
-        /tmp/2/llama-latest/llama-bench -m /tmp/qwen3-4B-Q4_K.gguf        
+        /tmp/llama-latest/llama-bench -m /tmp/qwen3-4B-Q4_K.gguf        
 
     - name: Benchmark Models (latest) IQ4_NL
       run: |
         echo "Benchmarking Quantised Model (Latest):"
-        /tmp/2/llama-latest/llama-bench -m /tmp/qwen3-4B-IQ4_NL.gguf
+        /tmp/llama-latest/llama-bench -m /tmp/qwen3-4B-IQ4_NL.gguf
         
 #    - name: Benchmark Models (latest) IQ4_XS
 #      run: |
 #        echo "Benchmarking Quantised Model (Latest):"
-#        /tmp/2/llama-latest/llama-bench -m /tmp/qwen3-4B-IQ4_XS.gguf
+#        /tmp/llama-latest/llama-bench -m /tmp/qwen3-4B-IQ4_XS.gguf
 
 
     - name: Benchmark Models (latest) Q4_0 (-rtr 1)
       run: |
         echo "Benchmarking Quantised Model (Latest):"
-        /tmp/2/llama-latest/llama-bench -rtr 1 -m /tmp/qwen3-4B-Q4_0.gguf
+        /tmp/llama-latest/llama-bench -rtr 1 -m /tmp/qwen3-4B-Q4_0.gguf
 
     - name: Benchmark Models (latest) Q4_K (-rtr 1)
       run: |
         echo "Benchmarking Quantised Model (Latest):"
-        /tmp/2/llama-latest/llama-bench -rtr 1 -m /tmp/qwen3-4B-Q4_K.gguf
+        /tmp/llama-latest/llama-bench -rtr 1 -m /tmp/qwen3-4B-Q4_K.gguf
 
     - name: Benchmark Models (latest) IQ4_NL (-rtr 1)
       run: |
         echo "Benchmarking Quantised Model (Latest):"
-        /tmp/2/llama-latest/llama-bench -rtr 1 -m /tmp/qwen3-4B-IQ4_NL.gguf
+        /tmp/llama-latest/llama-bench -rtr 1 -m /tmp/qwen3-4B-IQ4_NL.gguf
 
 #    - name: Benchmark Models (latest) IQ4_XS (-rtr 1)
 #      run: |
 #        echo "Benchmarking Quantised Model (Latest):"
-#        /tmp/2/llama-latest/llama-bench -rtr 1 -m /tmp/qwen3-4B-IQ4_XS.gguf
+#        /tmp/llama-latest/llama-bench -rtr 1 -m /tmp/qwen3-4B-IQ4_XS.gguf
