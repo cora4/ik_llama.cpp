@@ -78,9 +78,6 @@ jobs:
 #        with:
 #          name: llama-latest-bin-ubuntu-x64
 #          path: build2/
-
-       - name: Checkout
-         uses: actions/checkout@v4
    
        - name: Create Release
          run: |
