@@ -4,6 +4,9 @@ name: icl
 on:
   workflow_dispatch: # allows manual triggering
 
+permissions:
+  contents: write
+
 env:
   GGML_NLOOP: 3
   GGML_N_THREADS: 1
