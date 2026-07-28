@@ -77,7 +77,7 @@ jobs:
 
       - name: Create Release
         run: |
-          TAG="main-${{ github.run_number }}-${RANDOM}"
+          TAG="icl-${{ github.run_number }}-${RANDOM}"
           git tag "$TAG"
           git push origin "$TAG"
           gh release create "$TAG" /tmp/llama-latest-bin-ubuntu-icl.zip --title "Release $TAG"
