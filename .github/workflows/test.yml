@@ -38,7 +38,7 @@ jobs:
     - name: Download Dependencies
       id: dl
       run: |
-        wget -q https://github.com/cora4/kernel_build_action/releases/download/main-13-7977/qwen3-4B-Q2_0.gguf
+        wget -q https://github.com/cora4/kernel_build_action/releases/download/main-13/qwen3-4B-Q2_0.gguf
         # wget -q https://github.com/cora4/ik_llama.cpp/releases/download/a/qwen3-1.7B-Q2_0.gguf
         # ln -s qwen3-1.7B-Q2_0.gguf qwen3-4B-Q2_0.gguf
         wget -q https://github.com/PrismML-Eng/llama.cpp/releases/download/prism-b9596-9fcaed7/llama-prism-b9596-9fcaed7-bin-ubuntu-x64.tar.gz
@@ -91,8 +91,8 @@ jobs:
           
     - name: Quantise Model IQ4_NL
       run: |
-        wget -q https://github.com/cora4/kernel_build_action/releases/download/main-1-2894/xaa -O /tmp/xaa
-        wget -q https://github.com/cora4/kernel_build_action/releases/download/main-1-2894/xab -O /tmp/xab
+        wget -q https://github.com/cora4/kernel_build_action/releases/download/main-1/xaa -O /tmp/xaa
+        wget -q https://github.com/cora4/kernel_build_action/releases/download/main-1/xab -O /tmp/xab
         cat /tmp/xaa /tmp/xab > /tmp/qwen3-4B-IQ4_NL.gguf
         rm /tmp/xaa /tmp/xab          
 
@@ -111,7 +111,7 @@ jobs:
 #          --tensor-type ffn_down=iq4_xs --tensor-type ffn_gate=iq4_xs --tensor-type ffn_up=iq4_xs \
 #          --tensor-type attn_output=iq4_xs /tmp/qwen3-4B-Q4_0.gguf /tmp/qwen3-4B-IQ4_XS.gguf iq4_xs
 
-#        wget -q https://github.com/cora4/kernel_build_action/releases/download/main-33-29412/qwen3-4B-IQ4_XS.gguf -O /tmp/qwen3-4B-IQ4_XS.gguf
+#        wget -q https://github.com/cora4/kernel_build_action/releases/download/main-33/qwen3-4B-IQ4_XS.gguf -O /tmp/qwen3-4B-IQ4_XS.gguf
 
     - name: Quantise Model MXFP4
       run: |
