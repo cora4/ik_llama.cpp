@@ -18,7 +18,8 @@ jobs:
         elif grep -q "Intel" /proc/cpuinfo; then
             if grep -q "avx512_bf16" /proc/cpuinfo; then
                 if lscpu|grep L1i|grep -q "128 KiB"; then
-                echo "Architecture: Granite Rapids"
+                  echo "Architecture: Granite Rapids"
+                  exit 1
                 else
                   echo "Architecture: Emerald Rapids"
                 fi
