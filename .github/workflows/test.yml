@@ -30,8 +30,8 @@ jobs:
             #else
                 echo "Architecture: Ice Lake"
                 wget -q https://github.com/cora4/ik_llama.cpp/releases/download/a/llama-latest-bin-ubuntu-x64-icl.zip
-                wget -q https://github.com/cora4/ik_llama.cpp/releases/download/a/llama-latest-bin-ubuntu-x64-icl-13.zip
-                unzip -qo -o llama-latest-bin-ubuntu-x64-icl-13.zip -d /tmp/2/
+                wget -q https://github.com/cora4/ik_llama.cpp/releases/download/a/llama-latest-bin-ubuntu-x64-icl-mr8-2.zip
+                unzip -qo -o llama-latest-bin-ubuntu-x64-icl-mr8-2.zip -d /tmp/2/
             #fi
         else
             echo "Architecture: Zen 4"
