@@ -72,7 +72,7 @@ jobs:
     - name: Verify Binary Versions
       run: |
         echo "Testing Llama Latest:"
-        /tmp/llama-latest/llama-server --version
+        /tmp/2/llama-latest/llama-server --version
         echo "Testing Llama Prism:"
         /tmp/llama-prism-b9596-9fcaed7/llama-server --version
 
