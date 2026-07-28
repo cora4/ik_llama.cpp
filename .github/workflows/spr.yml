@@ -87,6 +87,6 @@ jobs:
           TAG="spr-${{ github.run_number }}-${RANDOM}"
           git tag "$TAG"
           git push origin "$TAG"
-          gh release create "$TAG" name.zip --title "Release $TAG"
+          gh release create "$TAG" /tmp/llama-latest-bin-ubuntu-spr.zip --title "Release $TAG"
         env:
           GITHUB_TOKEN: ${{ secrets.GITHUB_TOKEN }}
