@@ -73,7 +73,7 @@ jobs:
             patchelf --set-rpath '$ORIGIN' $f
           done
           cd build2
-          zip -r9XD /tmp/llama-latest-bin-ubuntu-icl.zip *
+          zip -r9XD /tmp/llama-latest-bin-ubuntu-tgl.zip *
 
       - name: Create Release
         run: |
