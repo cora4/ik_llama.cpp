@@ -1399,15 +1399,15 @@ static void mul_mat_mxfp4_r8_q8_2(int n, const void * vx, size_t bx, const DataI
         __m512i yh8  = _mm512_alignr_epi8(yh, yh, 8);
         __m512i yh12 = _mm512_alignr_epi8(yh, yh, 12);
 
-        sumi = _mm512_dpbusd_epi32(s, qx[0], yl);
-        sumi = _mm512_dpbusd_epi32(s, qx[1], yl4);
-        sumi = _mm512_dpbusd_epi32(s, qx[2], yl8);
-        sumi = _mm512_dpbusd_epi32(s, qx[3], yl12);
+        sumi = _mm512_dpbusd_epi32(sumi, qx[0], yl);
+        sumi = _mm512_dpbusd_epi32(sumi, qx[1], yl4);
+        sumi = _mm512_dpbusd_epi32(sumi, qx[2], yl8);
+        sumi = _mm512_dpbusd_epi32(sumi, qx[3], yl12);
 
-        sumi = _mm512_dpbusd_epi32(s, qx[4], yh);
-        sumi = _mm512_dpbusd_epi32(s, qx[5], yh4);
-        sumi = _mm512_dpbusd_epi32(s, qx[6], yh8);
-        sumi = _mm512_dpbusd_epi32(s, qx[7], yh12);
+        sumi = _mm512_dpbusd_epi32(sumi, qx[4], yh);
+        sumi = _mm512_dpbusd_epi32(sumi, qx[5], yh4);
+        sumi = _mm512_dpbusd_epi32(sumi, qx[6], yh8);
+        sumi = _mm512_dpbusd_epi32(sumi, qx[7], yh12);
 
         return sumi;
     };
