@@ -1,4 +1,4 @@
-name: icl
+name: tgl
 
 on:
   workflow_dispatch: # allows manual triggering
