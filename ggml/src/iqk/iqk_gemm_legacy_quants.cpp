@@ -1343,58 +1343,6 @@ static void mul_mat_mxfp4_r8_q8_2_avx2(int n, const void * vx, size_t bx, const 
     }
 }
 
-#if defined(__AVX512VBMI__)
-alignas(64) static const uint8_t ctrl_mask[8][64] = {
-    // qx[0] – low 16‑byte word, no shift
-    { 0, 1, 2, 3,  4, 5, 6, 7,  8, 9,10,11, 12,13,14,15,
-      0,0,0,0,0,0,0,0,0,0,0,0,0,0,0,0,
-      0,0,0,0,0,0,0,0,0,0,0,0,0,0,0,0,
-      0,0,0,0,0,0,0,0,0,0,0,0,0,0,0,0 },
-
-    // qx[1] – high 16‑byte word, no shift
-    {16,17,18,19, 20,21,22,23, 24,25,26,27, 28,29,30,31,
-      0,0,0,0,0,0,0,0,0,0,0,0,0,0,0,0,
-      0,0,0,0,0,0,0,0,0,0,0,0,0,0,0,0,
-      0,0,0,0,0,0,0,0,0,0,0,0,0,0,0,0 },
-
-    // qx[2] – low word, rotated left by 4 bytes
-    { 4, 5, 6, 7,  8, 9,10,11, 12,13,14,15,  0, 1, 2, 3,
-      0,0,0,0,0,0,0,0,0,0,0,0,0,0,0,0,
-      0,0,0,0,0,0,0,0,0,0,0,0,0,0,0,0,
-      0,0,0,0,0,0,0,0,0,0,0,0,0,0,0,0 },
-
-    // qx[3] – high word, rotated left by 4 bytes
-    {20,21,22,23, 24,25,26,27, 28,29,30,31, 16,17,18,19,
-      0,0,0,0,0,0,0,0,0,0,0,0,0,0,0,0,
-      0,0,0,0,0,0,0,0,0,0,0,0,0,0,0,0,
-      0,0,0,0,0,0,0,0,0,0,0,0,0,0,0,0 },
-
-    // qx[4] – low word, rotated left by 8 bytes
-    { 8, 9,10,11, 12,13,14,15,  0, 1, 2, 3,  4, 5, 6, 7,
-      0,0,0,0,0,0,0,0,0,0,0,0,0,0,0,0,
-      0,0,0,0,0,0,0,0,0,0,0,0,0,0,0,0,
-      0,0,0,0,0,0,0,0,0,0,0,0,0,0,0,0 },
-
-    // qx[5] – high word, rotated left by 8 bytes
-    {24,25,26,27, 28,29,30,31, 16,17,18,19, 20,21,22,23,
-      0,0,0,0,0,0,0,0,0,0,0,0,0,0,0,0,
-      0,0,0,0,0,0,0,0,0,0,0,0,0,0,0,0,
-      0,0,0,0,0,0,0,0,0,0,0,0,0,0,0,0 },
-
-    // qx[6] – low word, rotated left by 12 bytes
-    {12,13,14,15,  0, 1, 2, 3,  4, 5, 6, 7,  8, 9,10,11,
-      0,0,0,0,0,0,0,0,0,0,0,0,0,0,0,0,
-      0,0,0,0,0,0,0,0,0,0,0,0,0,0,0,0,
-      0,0,0,0,0,0,0,0,0,0,0,0,0,0,0,0 },
-
-    // qx[7] – high word, rotated left by 12 bytes
-    {28,29,30,31, 16,17,18,19, 20,21,22,23, 24,25,26,27,
-      0,0,0,0,0,0,0,0,0,0,0,0,0,0,0,0,
-      0,0,0,0,0,0,0,0,0,0,0,0,0,0,0,0,
-      0,0,0,0,0,0,0,0,0,0,0,0,0,0,0,0 }
-};
-#endif
-
 #ifdef HAVE_FANCY_SIMD
 template <int nrc_y>
 static void mul_mat_mxfp4_r8_q8_2(int n, const void * vx, size_t bx, const DataInfo& info, int nrc_x) {
@@ -1411,6 +1359,11 @@ static void mul_mat_mxfp4_r8_q8_2(int n, const void * vx, size_t bx, const DataI
     auto table256 = MM256_SET1_M128I(table128);
     auto table = _mm512_inserti32x8(_mm512_castsi256_si512(table256), table256, 1);
     table = _mm512_add_epi8(table, _mm512_set1_epi8(12));
+
+    //__m128i t128 = _mm_loadu_si128((const __m128i *)kvalues_mxfp4);
+    //__m512i table = _mm512_broadcast_i32x4(t128);
+    //table = _mm512_add_epi8(table, _mm512_set1_epi8(12));
+    
     __m512  acc[2*nrc_y] = {};
     __m512i qx[8];
     auto prepare = [&qx, &m4, &table] (const block_mxfp4_r8& iq4l, const block_mxfp4_r8& iq4h) {
@@ -1428,26 +1381,34 @@ static void mul_mat_mxfp4_r8_q8_2(int n, const void * vx, size_t bx, const DataI
     };
 #if defined(__AVX512VBMI__)
     auto dot = [&qx] (const int8_t *qy) -> __m512i {
-        __m512i act = _mm512_load_si512(qy);   // aligned load – Q8 buffers are 64‑B aligned
-
-        __m512i a0 = _mm512_permutexvar_epi8(_mm512_load_si512(&ctrl_mask[0][0]), act);
-        __m512i a1 = _mm512_permutexvar_epi8(_mm512_load_si512(&ctrl_mask[1][0]), act);
-        __m512i a2 = _mm512_permutexvar_epi8(_mm512_load_si512(&ctrl_mask[2][0]), act);
-        __m512i a3 = _mm512_permutexvar_epi8(_mm512_load_si512(&ctrl_mask[3][0]), act);
-        __m512i a4 = _mm512_permutexvar_epi8(_mm512_load_si512(&ctrl_mask[4][0]), act);
-        __m512i a5 = _mm512_permutexvar_epi8(_mm512_load_si512(&ctrl_mask[5][0]), act);
-        __m512i a6 = _mm512_permutexvar_epi8(_mm512_load_si512(&ctrl_mask[6][0]), act);
-        __m512i a7 = _mm512_permutexvar_epi8(_mm512_load_si512(&ctrl_mask[7][0]), act);
-
         __m512i sumi = _mm512_setzero_si512();
-        sumi = _mm512_dpbusd_epi32(sumi, qx[0], a0);
-        sumi = _mm512_dpbusd_epi32(sumi, qx[1], a1);
-        sumi = _mm512_dpbusd_epi32(sumi, qx[2], a2);
-        sumi = _mm512_dpbusd_epi32(sumi, qx[3], a3);
-        sumi = _mm512_dpbusd_epi32(sumi, qx[4], a4);
-        sumi = _mm512_dpbusd_epi32(sumi, qx[5], a5);
-        sumi = _mm512_dpbusd_epi32(sumi, qx[6], a6);
-        sumi = _mm512_dpbusd_epi32(sumi, qx[7], a7);
+
+        __m512i yl =
+            _mm512_broadcast_i32x4(
+                _mm_loadu_si128((const __m128i *)qy));
+
+        __m512i yh =
+            _mm512_broadcast_i32x4(
+                _mm_loadu_si128((const __m128i *)qy + 1));
+
+        __m512i yl4  = _mm512_alignr_epi8(yl, yl, 4);
+        __m512i yl8  = _mm512_alignr_epi8(yl, yl, 8);
+        __m512i yl12 = _mm512_alignr_epi8(yl, yl, 12);
+
+        __m512i yh4  = _mm512_alignr_epi8(yh, yh, 4);
+        __m512i yh8  = _mm512_alignr_epi8(yh, yh, 8);
+        __m512i yh12 = _mm512_alignr_epi8(yh, yh, 12);
+
+        sumi = _mm512_dpbusd_epi32(s, qx[0], yl);
+        sumi = _mm512_dpbusd_epi32(s, qx[1], yl4);
+        sumi = _mm512_dpbusd_epi32(s, qx[2], yl8);
+        sumi = _mm512_dpbusd_epi32(s, qx[3], yl12);
+
+        sumi = _mm512_dpbusd_epi32(s, qx[4], yh);
+        sumi = _mm512_dpbusd_epi32(s, qx[5], yh4);
+        sumi = _mm512_dpbusd_epi32(s, qx[6], yh8);
+        sumi = _mm512_dpbusd_epi32(s, qx[7], yh12);
+
         return sumi;
     };
 #else
@@ -1471,7 +1432,7 @@ static void mul_mat_mxfp4_r8_q8_2(int n, const void * vx, size_t bx, const DataI
         sumi = _mm512_dpbusd_epi32(sumi, qx[7], _mm512_shuffle_epi32(yh, _MM_PERM_ENUM(0xff)));
         return sumi;
     };
-#endif    
+#endif
     float d8[8*nrc_y];
     for (int ix = 0; ix < nrc_x; ix += 16) {
         auto iq4l = (const block_mxfp4_r8 *)((const char *)vx + (ix+0)*bx);
