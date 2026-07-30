@@ -100,7 +100,7 @@ jobs:
       run: |
         /tmp/llama-latest/llama-quantize \
           --allow-requantize --token-embedding-type q4_0 \
-          --ffn-down-type iq4_kt --attn-v-type iq4_kt /tmp/qwen3-4B-Q4_0.gguf /tmp/qwen3-4B-IQ4_K.gguf iq4_kt
+          --ffn-down-type iq4_kt --attn-v-type iq4_kt /tmp/qwen3-4B-Q4_0.gguf /tmp/qwen3-4B-IQ4_KT.gguf iq4_kt
 
     - name: Quantise Model IQ4_KS
       run: |
@@ -145,7 +145,7 @@ jobs:
         echo "Benchmarking Quantised Model (Latest):"
         /tmp/llama-latest/llama-bench -m /tmp/qwen3-4B-IQ4_KT.gguf
         
-    - name: Benchmark Models (latest) IQ4_K (-rtr 1)
+    - name: Benchmark Models (latest) IQ4_KT (-rtr 1)
       run: |
         echo "Benchmarking Quantised Model (Latest):"
         /tmp/llama-latest/llama-bench -rtr 1 -m /tmp/qwen3-4B-IQ4_KT.gguf
