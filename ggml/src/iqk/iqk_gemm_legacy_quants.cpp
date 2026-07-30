@@ -830,7 +830,6 @@ alignas(64) static const uint8_t iq4_nl_values_u8_512[64] = {
 template <int nrc_y>
 static void mul_mat_iq4_nl_r8_q8_2(int n, const void * vx, size_t bx, const DataInfo& info, int nrc_x) {
     GGML_ASSERT(nrc_x%16 == 0);
-    GGML_ASSERT(nb % 4 == 0);
     Q8<nrc_y, block_q8_2_x4> q8(info);
     int nb = n / QK4_NL;
     const __m512i nibble_mask =
@@ -1011,7 +1010,7 @@ static void mul_mat_iq4_nl_r4_q8_2(int n, const void * vx, size_t bx, const Data
     GGML_ASSERT(nrc_x%4 == 0);
     Q8<nrc_y, block_q8_2_x4> q8(info);
     auto m4 = _mm256_set1_epi8(0xf);
-    auto m1 = _mm256_set1_epi16(1);
+    // auto m1 = _mm256_set1_epi16(1);
     auto values128 = _mm_loadu_si128((const __m128i *)iq4k_values);
     auto values = _mm256_broadcastsi128_si256(values128);
     int nb = n / QK4_NL;
