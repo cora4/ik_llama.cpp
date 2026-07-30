@@ -15,6 +15,7 @@ jobs:
             echo "Architecture: AVX2 (haswell/zen3)"
             exit 1
             wget -q https://github.com/cora4/ik_llama.cpp/releases/download/zen3-17-21378/llama-latest-bin-ubuntu-zen3.zip
+        else
         #elif grep -q "Intel" /proc/cpuinfo; then
             #if grep -q "avx512_bf16" /proc/cpuinfo; then
             #    if lscpu|grep L1i|grep -q "128 KiB"; then
@@ -27,12 +28,11 @@ jobs:
             #    wget -q https://github.com/cora4/ik_llama.cpp/releases/download/spr-18-15448/llama-latest-bin-ubuntu-spr.zip
             #else
                 echo "Architecture: Ice Lake"
-                # exit 1
                 wget -q https://github.com/cora4/ik_llama.cpp/releases/download/icl-12-5481/llama-latest-bin-ubuntu-icl.zip
                 wget -q https://github.com/cora4/ik_llama.cpp/releases/download/icl-13-5025/llama-latest-bin-ubuntu-icl.zip
                 unzip -o llama-latest-bin-ubuntu-icl.zip -d /tmp/2/
             #fi
-        else
+        #else
             echo "Architecture: Zen 4"
             #exit 1
             #wget -q https://github.com/cora4/ik_llama.cpp/releases/download/zen4-19-14370/llama-latest-bin-ubuntu-zen4.zip
