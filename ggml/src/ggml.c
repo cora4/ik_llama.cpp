@@ -18861,6 +18861,7 @@ static void ggml_compute_forward_out_prod(
         case GGML_TYPE_IQ2_BN_R4:
         case GGML_TYPE_IQ4_NL:
         case GGML_TYPE_IQ4_NL_R4:
+        case GGML_TYPE_IQ4_NL_R8:
         case GGML_TYPE_IQ4_XS_R8:
         case GGML_TYPE_Q4_0_R8:
         case GGML_TYPE_Q5_0_R4:
