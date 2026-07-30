@@ -140,10 +140,10 @@ jobs:
           --tensor-type ffn_down=mxfp4 --tensor-type ffn_gate=mxfp4 --tensor-type ffn_up=mxfp4 \
           --tensor-type attn_output=mxfp4 /tmp/qwen3-4B-Q4_0.gguf /tmp/qwen3-4B-MXFP4.gguf 38
 
-    - name: Benchmark Models (latest) IQ4_K
+    - name: Benchmark Models (latest) IQ4_KT
       run: |
         echo "Benchmarking Quantised Model (Latest):"
-        /tmp/llama-latest/llama-bench -m /tmp/qwen3-4B-IQ4_K%.gguf
+        /tmp/llama-latest/llama-bench -m /tmp/qwen3-4B-IQ4_KT.gguf
         
     - name: Benchmark Models (latest) IQ4_K (-rtr 1)
       run: |
