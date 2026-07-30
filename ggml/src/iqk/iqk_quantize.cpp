@@ -5481,9 +5481,9 @@ void dequantize_row_iq4_nl_r8(
     }
 }
 
-void vec_dot_iq4_nl_r4_q8_0(int n, float * s, size_t bs, const void * vx, size_t bx, const void * vy, size_t by, int nrc) {
+void vec_dot_iq4_nl_r8_q8_0(int n, float * s, size_t bs, const void * vx, size_t bx, const void * vy, size_t by, int nrc) {
 #if GGML_USE_IQK_MULMAT
-    if (iqk_mul_mat(1, 1, n, GGML_TYPE_IQ4_NL_R4, vx, 0, GGML_TYPE_Q8_0, vy, 0, s, 0, 0, 1)) {
+    if (iqk_mul_mat(1, 1, n, GGML_TYPE_IQ4_NL_R8, vx, 0, GGML_TYPE_Q8_0, vy, 0, s, 0, 0, 1)) {
         return;
     }
 #endif
