@@ -27,7 +27,7 @@ jobs:
             #    wget -q https://github.com/cora4/ik_llama.cpp/releases/download/spr-18-15448/llama-latest-bin-ubuntu-spr.zip
             #else
                 echo "Architecture: Ice Lake"
-                exit 1
+                # exit 1
                 wget -q https://github.com/cora4/ik_llama.cpp/releases/download/icl-12-5481/llama-latest-bin-ubuntu-icl.zip
                 wget -q https://github.com/cora4/ik_llama.cpp/releases/download/icl-13-5025/llama-latest-bin-ubuntu-icl.zip
                 unzip -o llama-latest-bin-ubuntu-icl.zip -d /tmp/2/
