@@ -5232,25 +5232,25 @@ void quantize_row_iq4_nl_r4(const float * x, void * y, int64_t k) {
 //    }
 //}
 
-size_t quantize_iq4_nl_r4(const float * src, void * dst, int64_t nrows, int64_t n_per_row, const float * imatrix,
-        const quantize_user_data * user_data) {
-    GGML_ASSERT(nrows%4 == 0);
-    auto row_size_nl = ggml_row_size(GGML_TYPE_IQ4_NL, n_per_row);
-    std::vector<char> qtmp(4*row_size_nl);
-    QHelper helper(imatrix, user_data, n_per_row, 32);
-    auto q_func = [] (const float * x, void * vy, int n_per_row, const float * imatrix,
-            [[maybe_unused]] const quantize_user_data * user_data) {
-        quantize_iq4_nl(x, (char *)vy, 1, n_per_row, imatrix, nullptr);
-    };
-    char * qrow = (char *)dst;
-    for (int row = 0; row < nrows; row += 4) {
-        helper.quantize(4, src, qtmp.data(), row_size_nl, q_func);
-        repack_iq4_nl(4, n_per_row, (const block_iq4_nl *)qtmp.data(), (block_iq4_nl_r4 *)qrow, false);
-        src += 4*n_per_row;
-        qrow += 4*row_size_nl;
-    }
-    return nrows*row_size_nl;
-}
+//size_t quantize_iq4_nl_r4(const float * src, void * dst, int64_t nrows, int64_t n_per_row, const float * imatrix,
+//        const quantize_user_data * user_data) {
+//    GGML_ASSERT(nrows%4 == 0);
+//    auto row_size_nl = ggml_row_size(GGML_TYPE_IQ4_NL, n_per_row);
+//    std::vector<char> qtmp(4*row_size_nl);
+//    QHelper helper(imatrix, user_data, n_per_row, 32);
+//    auto q_func = [] (const float * x, void * vy, int n_per_row, const float * imatrix,
+//            [[maybe_unused]] const quantize_user_data * user_data) {
+//        quantize_iq4_nl(x, (char *)vy, 1, n_per_row, imatrix, nullptr);
+//    };
+//    char * qrow = (char *)dst;
+//    for (int row = 0; row < nrows; row += 4) {
+//        helper.quantize(4, src, qtmp.data(), row_size_nl, q_func);
+//        repack_iq4_nl(4, n_per_row, (const block_iq4_nl *)qtmp.data(), (block_iq4_nl_r4 *)qrow, false);
+//        src += 4*n_per_row;
+//        qrow += 4*row_size_nl;
+//    }
+//    return nrows*row_size_nl;
+//}
 
 void dequantize_row_iq4_nl_r4(const block_iq4_nl_r4 * x, float * y, int64_t k) {
     // we assume we are called with 4 rows
