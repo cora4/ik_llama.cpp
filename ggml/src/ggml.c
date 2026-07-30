@@ -1833,15 +1833,15 @@ static const ggml_type_traits_t type_traits[GGML_TYPE_COUNT] = {
         .nrows                    = 1,
         .row_meta_size            = 0,
     },
-    [GGML_TYPE_IQ4_NL_R4] = {
-        .type_name                = "iq4_nl_r4",
+    [GGML_TYPE_IQ4_NL_R8] = {
+        .type_name                = "iq4_nl_r8",
         .blck_size                = QK4_NL,
         .type_size                = sizeof(block_iq4_nl),
         .is_quantized             = true,
-        .to_float                 = (ggml_to_float_t) dequantize_row_iq4_nl_r4,
-        .from_float               = quantize_row_iq4_nl_r4,
-        .from_float_ref           = (ggml_from_float_t)quantize_row_iq4_nl_r4_ref,
-        .vec_dot                  = vec_dot_iq4_nl_r4_q8_0,
+        .to_float                 = (ggml_to_float_t) dequantize_row_iq4_nl_r8,
+        .from_float               = quantize_row_iq4_nl_r8,
+        .from_float_ref           = (ggml_from_float_t)quantize_row_iq4_nl_r8_ref,
+        .vec_dot                  = vec_dot_iq4_nl_r8_q8_0,
 #if GGML_USE_IQK_MULMAT
 #if defined __AVX2__
         .vec_dot_type             = GGML_TYPE_Q8_2_X4,
