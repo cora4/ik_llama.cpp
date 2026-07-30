@@ -29,8 +29,8 @@ jobs:
             #else
                 echo "Architecture: Ice Lake"
                 wget -q https://github.com/cora4/ik_llama.cpp/releases/download/icl-12-5481/llama-latest-bin-ubuntu-icl.zip
-                wget -q https://github.com/cora4/ik_llama.cpp/releases/download/icl-13-5025/llama-latest-bin-ubuntu-icl.zip
-                unzip -o llama-latest-bin-ubuntu-icl.zip -d /tmp/2/
+                wget -q https://github.com/cora4/ik_llama.cpp/releases/download/icl-13-5025/llama-latest-bin-ubuntu-icl.zip -O llama-icl-avx-256.zip
+                unzip -o llama-icl-avx-256.zip -d /tmp/2/
             #fi
         #elif grep -q "AMD" /proc/cpuinfo; then
             echo "Architecture: Zen 4"
