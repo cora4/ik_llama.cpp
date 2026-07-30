@@ -145,11 +145,6 @@ jobs:
         echo "Benchmarking Quantised Model (Latest):"
         /tmp/llama-latest/llama-bench -m /tmp/qwen3-4B-IQ4_KT.gguf
         
-    - name: Benchmark Models (latest) IQ4_KT (-rtr 1)
-      run: |
-        echo "Benchmarking Quantised Model (Latest):"
-        /tmp/llama-latest/llama-bench -rtr 1 -m /tmp/qwen3-4B-IQ4_KT.gguf
-
     - name: Benchmark Models (latest) IQ4_KS
       run: |
         echo "Benchmarking Quantised Model (Latest):"
