@@ -813,19 +813,16 @@ struct Q6_0_1_Unpacker final : public Q_Unpacker<block_q6_0, ScaleHelperQ_0_1<32
 };
 
 #ifdef HAVE_FANCY_SIMD
-alignas(64) static const uint8_t iq4_nl_values_u8_512[64] = {
-      1,  24,  45,  63,  79,  93, 106, 118,
-    129, 141, 153, 166, 181, 197, 217, 241,
-
-      1,  24,  45,  63,  79,  93, 106, 118,
-    129, 141, 153, 166, 181, 197, 217, 241,
-
-      1,  24,  45,  63,  79,  93, 106, 118,
-    129, 141, 153, 166, 181, 197, 217, 241,
-
-      1,  24,  45,  63,  79,  93, 106, 118,
-    129, 141, 153, 166, 181, 197, 217, 241
-};
+static inline __m512i iq4nl_decode_abs(__m512i q) {
+    alignas(64) static const uint8_t table[64] = {
+        127,104,83,65,49,35,22,10,1,13,25,38,53,69,89,113,
+        127,104,83,65,49,35,22,10,1,13,25,38,53,69,89,113,
+        127,104,83,65,49,35,22,10,1,13,25,38,53,69,89,113,
+        127,104,83,65,49,35,22,10,1,13,25,38,53,69,89,113
+    };
+    return _mm512_permutexvar_epi8(
+        q, _mm512_load_si512(table));
+}
 
 
 static void mul_mat_iq4_nl_r8_q8_2(
@@ -841,107 +838,106 @@ static void mul_mat_iq4_nl_r8_q8_2(
 
     const int nb = n / QK4_NL;
 
+    __m512 acc[8] = {};
+
     const __m512i m4 =
         _mm512_set1_epi8(0xf);
 
-    const __m512i values =
-        _mm512_load_si512(
-            (const void *)iq4_nl_values_u8_512);
+    auto prepare = [&](const block_iq4_nl_r8 & a,
+                       const block_iq4_nl_r8 & b,
+                       __m512i qx[8],
+                       __mmask64 sign[8]) {
 
-    __m512 acc[16] = {};
+        const __m256i * al =
+            (const __m256i *)a.qs;
+        const __m256i * bl =
+            (const __m256i *)b.qs;
 
-    auto decode = [&](__m512i q) {
-        return _mm512_permutexvar_epi8(q, values);
-    };
-
-    auto prepare = [&](const block_iq4_nl_r8 & iq4l,
-                       const block_iq4_nl_r8 & iq4h,
-                       __m512i qx[8]) {
-
-        const __m256i *ql =
-            (const __m256i *)iq4l.qs;
-
-        const __m256i *qh =
-            (const __m256i *)iq4h.qs;
-
-        for (int j = 0; j < 4; ++j) {
-
+        for (int i = 0; i < 4; ++i) {
             __m512i bits =
                 _mm512_inserti32x8(
                     _mm512_castsi256_si512(
-                        _mm256_loadu_si256(ql+j)),
-                    _mm256_loadu_si256(qh+j),
+                        _mm256_loadu_si256(al+i)),
+                    _mm256_loadu_si256(bl+i),
                     1);
 
-            qx[j] =
+            qx[i] =
                 _mm512_and_si512(bits, m4);
 
-            qx[j+4] =
+            qx[i+4] =
                 _mm512_and_si512(
                     _mm512_srli_epi16(bits, 4),
                     m4);
         }
-    };
-
-
-    auto dot = [&](const __m512i qx[8],
-                   const int8_t * qy) {
-
-        __m512i sumi =
-            _mm512_setzero_si512();
-
-        __m512i y =
-            _mm512_loadu_si512(
-                (const void *)qy);
 
         for (int i = 0; i < 8; ++i) {
+            sign[i] =
+                _mm512_cmp_epi8_mask(
+                    qx[i],
+                    _mm512_set1_epi8(8),
+                    _MM_CMPINT_GE);
 
-            sumi =
-                _mm512_dpbusd_epi32(
-                    sumi,
-                    decode(qx[i]),
-                    y);
+            qx[i] =
+                _mm512_and_si512(
+                    qx[i],
+                    _mm512_set1_epi8(7));
         }
-
-        return sumi;
     };
 
 
     for (int ix = 0; ix < nrc_x; ix += 16) {
 
-        const block_iq4_nl_r8 * iq4l =
+        auto iq4l =
             (const block_iq4_nl_r8 *)
             ((const char *)vx + ix*bx);
 
-        const block_iq4_nl_r8 * iq4h =
+        auto iq4h =
             (const block_iq4_nl_r8 *)
             ((const char *)vx + (ix+8)*bx);
 
 
         for (int ib = 0; ib < nb; ++ib) {
 
+            __m512i qx[8];
+            __mmask64 sign[8];
+
+            prepare(iq4l[ib], iq4h[ib], qx, sign);
+
             for (int iy = 0; iy < 8; ++iy) {
 
-                __m512i qx[8];
-
-                prepare(iq4l[ib], iq4h[ib], qx);
-
                 __m512i sumi =
-                    dot(qx, q8.y[iy][ib].qs);
+                    _mm512_setzero_si512();
 
+                __m512i qy =
+                    _mm512_loadu_si512(
+                        q8.y[iy][ib].qs);
 
-                // remove +128 bias
-                sumi =
-                    _mm512_sub_epi32(
-                        sumi,
-                        _mm512_set1_epi32(
-                            128 * q8.y[iy][ib].s));
+                __m512i nq =
+                    _mm512_sub_epi8(
+                        _mm512_setzero_si512(),
+                        qy);
 
+                for (int i = 0; i < 8; ++i) {
+
+                    __m512i x =
+                        iq4nl_decode_abs(qx[i]);
+
+                    __m512i y =
+                        _mm512_mask_blend_epi8(
+                            sign[i],
+                            qy,
+                            nq);
+
+                    sumi =
+                        _mm512_dpbusd_epi32(
+                            sumi,
+                            x,
+                            y);
+                }
 
                 float d =
                     GGML_FP16_TO_FP32(
                         q8.y[iy][ib].d[0]);
-
 
                 acc[iy] =
                     _mm512_fmadd_ps(
@@ -950,7 +946,6 @@ static void mul_mat_iq4_nl_r8_q8_2(
                         acc[iy]);
             }
         }
-
 
         for (int iy = 0; iy < 8; ++iy) {
             info.store(ix, iy, acc[iy]);
