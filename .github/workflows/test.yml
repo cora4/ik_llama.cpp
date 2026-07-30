@@ -32,10 +32,12 @@ jobs:
                 wget -q https://github.com/cora4/ik_llama.cpp/releases/download/icl-13-5025/llama-latest-bin-ubuntu-icl.zip -O llama-icl-avx-256.zip
                 unzip -o llama-icl-avx-256.zip -d /tmp/2/
             #fi
-        #elif grep -q "AMD" /proc/cpuinfo; then
+        #else
+          if grep -q "AMD" /proc/cpuinfo; then
             echo "Architecture: Zen 4"
             #exit 1
             #wget -q https://github.com/cora4/ik_llama.cpp/releases/download/zen4-19-14370/llama-latest-bin-ubuntu-zen4.zip
+          fi
         fi
         
     - name: Download Dependencies
