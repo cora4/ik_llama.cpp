@@ -5201,15 +5201,15 @@ void vec_dot_iq4_kss_q8_k(int n, float * s, size_t bs, const void * vx, size_t b
 //
 // ========================================= iq4_nl_r4
 //
-void quantize_row_iq4_nl_r4_ref(const float * x, block_iq4_nl_r4  * y, int64_t k) {
+//void quantize_row_iq4_nl_r4_ref(const float * x, block_iq4_nl_r4  * y, int64_t k) {
     // we assume we are called with 4 rows
-    quantize_iq4_nl_r4(x, (void *)y, 4, k/4, nullptr, nullptr);
-}
+//    quantize_iq4_nl_r4(x, (void *)y, 4, k/4, nullptr, nullptr);
+//}
 
-void quantize_row_iq4_nl_r4(const float * x, void * y, int64_t k) {
+//void quantize_row_iq4_nl_r4(const float * x, void * y, int64_t k) {
     // we assume we are called with 4 rows
-    quantize_iq4_nl_r4(x, y, 4, k/4, nullptr, nullptr);
-}
+//    quantize_iq4_nl_r4(x, y, 4, k/4, nullptr, nullptr);
+//}
 
 //static void repack_iq4_nl(int nrows, int n_per_row, const block_iq4_nl * x, block_iq4_nl_r4 * y, [[maybe_unused]] bool online) {
 //   GGML_ASSERT(nrows%4 == 0);
