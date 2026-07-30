@@ -5199,173 +5199,92 @@ void vec_dot_iq4_kss_q8_k(int n, float * s, size_t bs, const void * vx, size_t b
 }
 
 //
-// ========================================= iq4_nl_r4
+// ========================================= iq4_nl_r8
 //
-//void quantize_row_iq4_nl_r4_ref(const float * x, block_iq4_nl_r4  * y, int64_t k) {
-    // we assume we are called with 4 rows
-//    quantize_iq4_nl_r4(x, (void *)y, 4, k/4, nullptr, nullptr);
-//}
-
-//void quantize_row_iq4_nl_r4(const float * x, void * y, int64_t k) {
-    // we assume we are called with 4 rows
-//    quantize_iq4_nl_r4(x, y, 4, k/4, nullptr, nullptr);
-//}
-
-//static void repack_iq4_nl(int nrows, int n_per_row, const block_iq4_nl * x, block_iq4_nl_r4 * y, [[maybe_unused]] bool online) {
-//   GGML_ASSERT(nrows%4 == 0);
-//    GGML_ASSERT(n_per_row%QK4_NL == 0);
-//    int nblock = n_per_row/QK4_NL;
-//    const block_iq4_nl * x4[4];
-//    for (int row = 0; row < nrows; row += 4) {
-//        for (int k = 0; k < 4; ++k) x4[k] = x + nblock*k;
-//        for (int ib = 0; ib < nblock; ++ib) {
-//            for (int k = 0; k < 4; ++k) y[ib].d[k] = x4[k][ib].d;
-//            for (int k = 0; k < 4; ++k) for (int i = 0; i < 4; ++i) {
-//                y[ib].qs[4*k+i+ 0] = (x4[k][ib].qs[i+0] & 0xf) | ((x4[k][ib].qs[i+ 8] & 0x0f) << 4);  //  0....3 +  8...11 from each row
-//                y[ib].qs[4*k+i+16] = (x4[k][ib].qs[i+0] >>  4) | ((x4[k][ib].qs[i+ 8] & 0xf0));       // 16...19 + 24...27 from each row
-//                y[ib].qs[4*k+i+32] = (x4[k][ib].qs[i+4] & 0xf) | ((x4[k][ib].qs[i+12] & 0x0f) << 4);  //  4....7 + 12...15 from each row
-//                y[ib].qs[4*k+i+48] = (x4[k][ib].qs[i+4] >>  4) | ((x4[k][ib].qs[i+12] & 0xf0));       // 20...23 + 28...31 from each row
-//            }
-//        }
-//        x += 4*nblock;
-//        y += nblock;
-//    }
-//}
-
-//size_t quantize_iq4_nl_r4(const float * src, void * dst, int64_t nrows, int64_t n_per_row, const float * imatrix,
-//        const quantize_user_data * user_data) {
-//    GGML_ASSERT(nrows%4 == 0);
-//    auto row_size_nl = ggml_row_size(GGML_TYPE_IQ4_NL, n_per_row);
-//    std::vector<char> qtmp(4*row_size_nl);
-//    QHelper helper(imatrix, user_data, n_per_row, 32);
-//    auto q_func = [] (const float * x, void * vy, int n_per_row, const float * imatrix,
-//            [[maybe_unused]] const quantize_user_data * user_data) {
-//        quantize_iq4_nl(x, (char *)vy, 1, n_per_row, imatrix, nullptr);
-//    };
-//    char * qrow = (char *)dst;
-//    for (int row = 0; row < nrows; row += 4) {
-//        helper.quantize(4, src, qtmp.data(), row_size_nl, q_func);
-//        repack_iq4_nl(4, n_per_row, (const block_iq4_nl *)qtmp.data(), (block_iq4_nl_r4 *)qrow, false);
-//        src += 4*n_per_row;
-//        qrow += 4*row_size_nl;
-//    }
-//    return nrows*row_size_nl;
-//}
-
-void dequantize_row_iq4_nl_r4(const block_iq4_nl_r4 * x, float * y, int64_t k) {
-    // we assume we are called with 4 rows
-    int n_per_row = k/4;
-    int nb = n_per_row/QK4_NL;
-    float * yk[4];
-    for (int k = 0; k < 4; ++k) yk[k] = y + k*n_per_row;
-    for (int ib = 0; ib < nb; ++ib) {
-        for (int k = 0; k < 4; ++k) {
-            float scale = GGML_FP16_TO_FP32(x[ib].d[k]);
-            for (int i = 0; i < 4; ++i) {
-                yk[k][QK4_NL*ib+i+ 0] = scale * iq4k_values[x[ib].qs[4*k+i+ 0] & 0xf];
-                yk[k][QK4_NL*ib+i+ 8] = scale * iq4k_values[x[ib].qs[4*k+i+ 0] >>  4];
-                yk[k][QK4_NL*ib+i+16] = scale * iq4k_values[x[ib].qs[4*k+i+16] & 0xf];
-                yk[k][QK4_NL*ib+i+24] = scale * iq4k_values[x[ib].qs[4*k+i+16] >>  4];
-                yk[k][QK4_NL*ib+i+ 4] = scale * iq4k_values[x[ib].qs[4*k+i+32] & 0xf];
-                yk[k][QK4_NL*ib+i+12] = scale * iq4k_values[x[ib].qs[4*k+i+32] >>  4];
-                yk[k][QK4_NL*ib+i+20] = scale * iq4k_values[x[ib].qs[4*k+i+48] & 0xf];
-                yk[k][QK4_NL*ib+i+28] = scale * iq4k_values[x[ib].qs[4*k+i+48] >>  4];
-            }
-        }
-    }
-}
-
-
-// iq4_nl_r8
 
 void quantize_row_iq4_nl_r8_ref(
         const float * x,
         block_iq4_nl_r8 * y,
         int64_t k) {
 
-    quantize_iq4_nl_r8(x, (void *) y, 8, k/8, nullptr, nullptr);
+    // k is the total number of floats across all 8 rows.
+    GGML_ASSERT(k % 8 == 0);
+    quantize_iq4_nl_r8(x, y, 8, k/8, nullptr, nullptr);
 }
-
 
 void quantize_row_iq4_nl_r8(
         const float * x,
         void * y,
         int64_t k) {
 
+    // k is the total number of floats across all 8 rows.
+    GGML_ASSERT(k % 8 == 0);
     quantize_iq4_nl_r8(x, y, 8, k/8, nullptr, nullptr);
 }
 
-static void repack_iq4_nl(
-        int nrows,
-        int n_per_row,
-        const block_iq4_nl * x,
-        block_iq4_nl_r8 * y,
-        [[maybe_unused]] bool online) {
-
-    GGML_ASSERT(nrows % 8 == 0);
-    GGML_ASSERT(n_per_row % QK4_NL == 0);
-
+static void repack_iq4_nl(int nrows, int n_per_row, const block_iq4_nl * x, block_iq4_nl_r8 * y, [[maybe_unused]] bool online) {
+    GGML_ASSERT(nrows%8 == 0);
+    GGML_ASSERT(n_per_row%QK4_NL == 0);
     const int nblock = n_per_row / QK4_NL;
-
     const block_iq4_nl * x8[8];
-
     for (int row = 0; row < nrows; row += 8) {
-
-        for (int k = 0; k < 8; ++k) {
-            x8[k] = x + k*nblock;
+        for (int ir = 0; ir < 8; ++ir) {
+            x8[ir] = x + ir*nblock;
         }
 
         for (int ib = 0; ib < nblock; ++ib) {
-
-            for (int k = 0; k < 8; ++k) {
-                y[ib].d[k] = x8[k][ib].d;
+            for (int ir = 0; ir < 8; ++ir) {
+                y[ib].d[ir] = x8[ir][ib].d;
             }
 
+            for (int ir = 0; ir < 8; ++ir) {
+                const uint8_t * q = x8[ir][ib].qs;
 
-            /*
-             * Layout:
-             *
-             * qs[0..63]:
-             *     rows 0..7, elements 0..15
-             *
-             * qs[64..127]:
-             *     rows 0..7, elements 16..31
-             *
-             *
-             * Every byte contains two nibbles.
-             */
-
-            for (int k = 0; k < 8; ++k) {
-
-                const uint8_t * q = x8[k][ib].qs;
-
-
-                for (int i = 0; i < 8; ++i) {
+                for (int i = 0; i < 4; ++i) {
+                    const int dst = 4*ir + i;
 
                     /*
-                     * Elements:
+                     * Low nibbles of source bytes 0..3 and 8..11:
                      *
-                     * 0..7   and 8..15
+                     * low nibble  -> elements 0..3
+                     * high nibble -> elements 8..11
                      */
-
-                    y[ib].qs[8*k+i+0] =
-                        (q[i+0] & 0xf) |
-                        ((q[i+8] & 0xf) << 4);
-
+                    y[ib].qs[dst + 0] =
+                        (q[i + 0] & 0x0f) |
+                        ((q[i + 8] & 0x0f) << 4);
 
                     /*
-                     * Elements:
+                     * High nibbles of source bytes 0..3 and 8..11:
                      *
-                     * 16..23 and 24..31
+                     * low nibble  -> elements 16..19
+                     * high nibble -> elements 24..27
                      */
+                    y[ib].qs[dst + 32] =
+                        (q[i + 0] >> 4) |
+                        (q[i + 8] & 0xf0);
 
-                    y[ib].qs[8*k+i+64] =
-                        (q[i+16] & 0xf) |
-                        ((q[i+24] & 0xf) << 4);
+                    /*
+                     * Low nibbles of source bytes 4..7 and 12..15:
+                     *
+                     * low nibble  -> elements 4..7
+                     * high nibble -> elements 12..15
+                     */
+                    y[ib].qs[dst + 64] =
+                        (q[i + 4] & 0x0f) |
+                        ((q[i + 12] & 0x0f) << 4);
+
+                    /*
+                     * High nibbles of source bytes 4..7 and 12..15:
+                     *
+                     * low nibble  -> elements 20..23
+                     * high nibble -> elements 28..31
+                     */
+                    y[ib].qs[dst + 96] =
+                        (q[i + 4] >> 4) |
+                        (q[i + 12] & 0xf0);
                 }
             }
         }
-
         x += 8*nblock;
         y += nblock;
     }
@@ -5380,44 +5299,38 @@ size_t quantize_iq4_nl_r8(
         const quantize_user_data * user_data) {
 
     GGML_ASSERT(nrows % 8 == 0);
+    GGML_ASSERT(n_per_row % QK4_NL == 0);
 
     const size_t row_size_nl =
         ggml_row_size(GGML_TYPE_IQ4_NL, n_per_row);
 
-
-    std::vector<char> qtmp(8 * row_size_nl);
-
+    std::vector<char> qtmp(8*row_size_nl);
 
     QHelper helper(
         imatrix,
         user_data,
         n_per_row,
-        32);
+        QK4_NL);
 
-
-    auto q_func =
-        [](
+    auto q_func = [](
             const float * x,
             void * vy,
             int n_per_row,
             const float * imatrix,
             [[maybe_unused]] const quantize_user_data * user_data) {
 
-            quantize_iq4_nl(
-                x,
-                (char *)vy,
-                1,
-                n_per_row,
-                imatrix,
-                nullptr);
-        };
+        quantize_iq4_nl(
+            x,
+            static_cast<char *>(vy),
+            1,
+            n_per_row,
+            imatrix,
+            nullptr);
+    };
 
-
-    char * qrow = (char *)dst;
-
+    char * qrow = static_cast<char *>(dst);
 
     for (int row = 0; row < nrows; row += 8) {
-
         helper.quantize(
             8,
             src,
@@ -5425,21 +5338,18 @@ size_t quantize_iq4_nl_r8(
             row_size_nl,
             q_func);
 
-
         repack_iq4_nl(
             8,
             n_per_row,
-            (const block_iq4_nl *) qtmp.data(),
-            (block_iq4_nl_r8 *) qrow,
+            reinterpret_cast<const block_iq4_nl *>(qtmp.data()),
+            reinterpret_cast<block_iq4_nl_r8 *>(qrow),
             false);
 
-
-        src += 8*n_per_row;
+        src  += 8*n_per_row;
         qrow += 8*row_size_nl;
     }
 
-
-    return nrows * row_size_nl;
+    return nrows*row_size_nl;
 }
 
 void dequantize_row_iq4_nl_r8(
@@ -5447,35 +5357,46 @@ void dequantize_row_iq4_nl_r8(
         float * y,
         int64_t k) {
 
-    // we assume we are called with 8 rows
+    // k is the total number of values across 8 rows.
+    GGML_ASSERT(k % 8 == 0);
+
     const int n_per_row = k/8;
+    GGML_ASSERT(n_per_row % QK4_NL == 0);
+
     const int nb = n_per_row/QK4_NL;
 
     float * yk[8];
 
-    for (int row = 0; row < 8; ++row) {
-        yk[row] = y + row*n_per_row;
+    for (int ir = 0; ir < 8; ++ir) {
+        yk[ir] = y + ir*n_per_row;
     }
 
     for (int ib = 0; ib < nb; ++ib) {
+        for (int ir = 0; ir < 8; ++ir) {
+            const float d =
+                GGML_FP16_TO_FP32(x[ib].d[ir]);
 
-        for (int row = 0; row < 8; ++row) {
+            for (int i = 0; i < 4; ++i) {
+                const int src = 4*ir + i;
 
-            const float scale =
-                GGML_FP16_TO_FP32(x[ib].d[row]);
+                const uint8_t q0 = x[ib].qs[src + 0];
+                const uint8_t q1 = x[ib].qs[src + 32];
+                const uint8_t q2 = x[ib].qs[src + 64];
+                const uint8_t q3 = x[ib].qs[src + 96];
 
-            for (int l = 0; l < 4; ++l) {
-                for (int i = 0; i < 4; ++i) {
+                float * yr = yk[ir] + QK4_NL*ib;
 
-                    const uint8_t q =
-                        x[ib].qs[32*l + 4*row + i];
+                yr[i +  0] = d*iq4k_values[q0 & 0x0f];
+                yr[i +  8] = d*iq4k_values[q0 >> 4];
 
-                    yk[row][QK4_NL*ib + 4*l + i + 0] =
-                        scale * iq4k_values[q & 0xf];
+                yr[i + 16] = d*iq4k_values[q1 & 0x0f];
+                yr[i + 24] = d*iq4k_values[q1 >> 4];
 
-                    yk[row][QK4_NL*ib + 4*l + i + 16] =
-                        scale * iq4k_values[q >> 4];
-                }
+                yr[i +  4] = d*iq4k_values[q2 & 0x0f];
+                yr[i + 12] = d*iq4k_values[q2 >> 4];
+
+                yr[i + 20] = d*iq4k_values[q3 & 0x0f];
+                yr[i + 28] = d*iq4k_values[q3 >> 4];
             }
         }
     }
