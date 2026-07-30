@@ -820,7 +820,7 @@ static void mul_mat_iq4_nl_r4_q8_2(int n, const void * vx, size_t bx, const Data
     auto m4 = _mm256_set1_epi8(0xf);
     auto m1 = _mm256_set1_epi16(1);
     auto values128 = _mm_loadu_si128((const __m128i *)iq4k_values);
-    auto values = _mm256_set1_m128i(values128);
+    auto values = _mm256_broadcastsi128_si256(values128);
     int nb = n / QK4_NL;
     __m256 acc[nrc_y] = {};
     __m256i qs[4];
