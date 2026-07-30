@@ -5224,61 +5224,50 @@ void quantize_row_iq4_nl_r8(
 
 static void repack_iq4_nl(int nrows, int n_per_row, const block_iq4_nl * x, block_iq4_nl_r8 * y, [[maybe_unused]] bool online) {
     GGML_ASSERT(nrows%8 == 0);
-    GGML_ASSERT(n_per_row%QK4_NL == 0);
+    GGML_ASSERT(n_per_row % QK4_NL == 0);
+
     const int nblock = n_per_row / QK4_NL;
+
     const block_iq4_nl * x8[8];
+
     for (int row = 0; row < nrows; row += 8) {
-        for (int ir = 0; ir < 8; ++ir) {
-            x8[ir] = x + ir*nblock;
+
+        for (int r = 0; r < 8; ++r) {
+            x8[r] = x + r*nblock;
         }
 
         for (int ib = 0; ib < nblock; ++ib) {
-            for (int ir = 0; ir < 8; ++ir) {
-                y[ib].d[ir] = x8[ir][ib].d;
+
+            // copy scales
+            for (int r = 0; r < 8; ++r) {
+                y[ib].d[r] = x8[r][ib].d;
             }
 
-            for (int ir = 0; ir < 8; ++ir) {
-                const uint8_t * q = x8[ir][ib].qs;
+            // preserve the IQ4_NL nibble permutation, extended to 8 rows
+            for (int r = 0; r < 8; ++r) {
+
+                const uint8_t * q = x8[r][ib].qs;
 
                 for (int i = 0; i < 4; ++i) {
-                    const int dst = 4*ir + i;
 
-                    /*
-                     * Low nibbles of source bytes 0..3 and 8..11:
-                     *
-                     * low nibble  -> elements 0..3
-                     * high nibble -> elements 8..11
-                     */
-                    y[ib].qs[dst + 0] =
+                    const int dst = 4*r + i;
+
+                    // elements 0..3 + 8..11
+                    y[ib].qs[dst +  0] =
                         (q[i + 0] & 0x0f) |
                         ((q[i + 8] & 0x0f) << 4);
 
-                    /*
-                     * High nibbles of source bytes 0..3 and 8..11:
-                     *
-                     * low nibble  -> elements 16..19
-                     * high nibble -> elements 24..27
-                     */
+                    // elements 16..19 + 24..27
                     y[ib].qs[dst + 32] =
                         (q[i + 0] >> 4) |
                         (q[i + 8] & 0xf0);
 
-                    /*
-                     * Low nibbles of source bytes 4..7 and 12..15:
-                     *
-                     * low nibble  -> elements 4..7
-                     * high nibble -> elements 12..15
-                     */
+                    // elements 4..7 + 12..15
                     y[ib].qs[dst + 64] =
                         (q[i + 4] & 0x0f) |
                         ((q[i + 12] & 0x0f) << 4);
 
-                    /*
-                     * High nibbles of source bytes 4..7 and 12..15:
-                     *
-                     * low nibble  -> elements 20..23
-                     * high nibble -> elements 28..31
-                     */
+                    // elements 20..23 + 28..31
                     y[ib].qs[dst + 96] =
                         (q[i + 4] >> 4) |
                         (q[i + 12] & 0xf0);
