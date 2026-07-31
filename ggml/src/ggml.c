@@ -30287,7 +30287,7 @@ void ggml_quantize_init(enum ggml_type type) {
         case GGML_TYPE_IQ2_S_R4:   iq2xs_init_impl(GGML_TYPE_IQ2_S);   break;
         case GGML_TYPE_IQ2_XXS:
         case GGML_TYPE_IQ2_XS:
-        case GGML_TYPE_IQ2_S:
+        // case GGML_TYPE_IQ2_S:
         case GGML_TYPE_IQ1_S:
         case GGML_TYPE_IQ1_M:   iq2xs_init_impl(type); break;
         case GGML_TYPE_IQ1_M_R4:iq2xs_init_impl(GGML_TYPE_IQ1_M); break;
