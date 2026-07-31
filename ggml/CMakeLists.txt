@@ -50,11 +50,11 @@ else()
     set(GGML_BLAS_VENDOR_DEFAULT "Generic")
 endif()
 
-if (CMAKE_CROSSCOMPILING)
-    set(GGML_NATIVE_DEFAULT OFF)
-else()
-    set(GGML_NATIVE_DEFAULT ON)
-endif()
+#if (CMAKE_CROSSCOMPILING)
+set(GGML_NATIVE_DEFAULT OFF)
+#else()
+#    set(GGML_NATIVE_DEFAULT ON)
+#endif()
 
 # general
 option(GGML_STATIC "ggml: static link libraries"         OFF)
