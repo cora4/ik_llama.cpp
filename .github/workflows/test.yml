@@ -141,15 +141,6 @@ jobs:
           --tensor-type ffn_down=mxfp4 --tensor-type ffn_gate=mxfp4 --tensor-type ffn_up=mxfp4 \
           --tensor-type attn_output=mxfp4 /tmp/qwen3-4B-Q4_0.gguf /tmp/qwen3-4B-MXFP4.gguf 38
 
-
-    - name: Benchmark Models (Prism) IQ4_NL
-      run: |
-         echo "Benchmarking Quantised Model (Prism):"
-         /tmp/llama-prism-b9596-9fcaed7/llama-bench -m /tmp/qwen3-4B-IQ4_NL.gguf
-         rm /tmp/llama-prism-b9596-9fcaed7/libggml-cpu-sapphirerapids.so
-         echo Without sapphire
-         /tmp/llama-prism-b9596-9fcaed7/llama-bench -m /tmp/qwen3-4B-IQ4_NL.gguf
-         
     - name: Benchmark Models (latest) IQ4_NL
       run: |
         echo "Benchmarking Quantised Model (Latest):"
@@ -160,7 +151,16 @@ jobs:
         echo "Benchmarking Quantised Model (Latest):"
         /tmp/llama-latest/llama-bench -rtr 1 -m /tmp/qwen3-4B-IQ4_NL.gguf   
 
-        
+    - name: Benchmark Models (Prism) IQ4_NL
+      run: |
+         echo "Benchmarking Quantised Model (Prism):"
+         /tmp/llama-prism-b9596-9fcaed7/llama-bench -m /tmp/qwen3-4B-IQ4_NL.gguf
+         rm /tmp/llama-prism-b9596-9fcaed7/libggml-cpu-sapphirerapids.so
+         if grep -q "avx512_bf16" /proc/cpuinfo; then
+           echo Without SPR
+           /tmp/llama-prism-b9596-9fcaed7/llama-bench -m /tmp/qwen3-4B-IQ4_NL.gguf
+         fi
+         
 #    - name: Benchmark Models (latest) IQ4_XS (-rtr 1)
 #      run: |
 #        echo "Benchmarking Quantised Model (Latest):"
