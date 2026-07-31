@@ -1,17 +1,5 @@
 set(ARCH_FLAGS "")
-if (NOT MSVC)
-    list(APPEND ARCH_FLAGS -march=native)
-endif()
 message(STATUS "ARCH_FLAGS = ${ARCH_FLAGS}")
-#if (CMAKE_OSX_ARCHITECTURES STREQUAL "x86_64" OR CMAKE_GENERATOR_PLATFORM_LWR MATCHES "^(x86_64|i686|amd64|x64|win32)$" OR
-#    (NOT CMAKE_OSX_ARCHITECTURES AND NOT CMAKE_GENERATOR_PLATFORM_LWR AND
-#    CMAKE_SYSTEM_PROCESSOR MATCHES "^(x86_64|i686|AMD64)$"))
-#    message(STATUS "x86 detected")
-#    if (NOT MSVC)
-#        list(APPEND ARCH_FLAGS -march=native)
-#    endif()
-#endif()
-
 add_compile_options("$<$<COMPILE_LANGUAGE:CXX>:${ARCH_FLAGS}>")
 set(TARGET llama-quantize-stats)
 add_executable(${TARGET} quantize-stats.cpp)
