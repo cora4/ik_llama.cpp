@@ -58,7 +58,7 @@ endif()
 
 # general
 option(GGML_STATIC "ggml: static link libraries"         OFF)
-option(GGML_NATIVE "ggml: enable -march=native flag"     ${GGML_NATIVE_DEFAULT})
+option(GGML_NATIVE "ggml: enable -march=native flag"     OFF)
 option(GGML_LTO    "ggml: enable link time optimization" OFF)
 option(GGML_CCACHE "ggml: use ccache if available"       ON)
 
@@ -84,11 +84,11 @@ endif()
 
 option(GGML_CPU_HBM     "ggml: use memkind for CPU HBM" OFF)
 
-option(GGML_AVX         "ggml: enable AVX"              ${INS_ENB})
-option(GGML_AVX2        "ggml: enable AVX2"             ${INS_ENB})
-option(GGML_AVX512      "ggml: enable AVX512"           OFF)
-option(GGML_AVX512_VBMI "ggml: enable AVX512-VBMI"      OFF)
-option(GGML_AVX512_VNNI "ggml: enable AVX512-VNNI"      OFF)
+option(GGML_AVX         "ggml: enable AVX"              ON)
+option(GGML_AVX2        "ggml: enable AVX2"             ON)
+option(GGML_AVX512      "ggml: enable AVX512"           ON)
+option(GGML_AVX512_VBMI "ggml: enable AVX512-VBMI"      ON)
+option(GGML_AVX512_VNNI "ggml: enable AVX512-VNNI"      ON)
 option(GGML_AVX512_BF16 "ggml: enable AVX512-BF16"      OFF)
 option(GGML_FMA         "ggml: enable FMA"              ${INS_ENB})
 if (NOT MSVC)
