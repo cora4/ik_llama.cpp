@@ -813,160 +813,501 @@ struct Q6_0_1_Unpacker final : public Q_Unpacker<block_q6_0, ScaleHelperQ_0_1<32
 };
 
 #ifdef HAVE_FANCY_SIMD
+/*
+ * Absolute values of the signed IQ4_NL table:
+ *
+ *   -127, -104, -83, -65, -49, -35, -22, -10,
+ *      1,   13,  25,  38,  53,  69,  89, 113
+ *
+ * The table ordering itself encodes the sign:
+ *
+ *   indices 0..7  -> negative
+ *   indices 8..15 -> positive
+ *
+ * The same 16-byte table is broadcast into every 128-bit lane because
+ * VPSHUFB operates independently in each 128-bit lane.
+ */
+static inline __m512i load_iq4nl_abs_values_512() {
+    alignas(16) static const uint8_t kvalues_iq4nl_abs[16] = {
+        127, 104, 83, 65, 49, 35, 22, 10,
+          1,  13, 25, 38, 53, 69, 89, 113
+    };
+
+    const __m128i values128 =
+        _mm_load_si128((const __m128i *)kvalues_iq4nl_abs);
+
+    return _mm512_broadcast_i32x4(values128);
+}
+
 template <int nrc_y>
 static void mul_mat_iq4_nl_r4_q8_2(int n, const void * vx, size_t bx, const DataInfo& info, int nrc_x) {
     GGML_ASSERT(nrc_x%8 == 0);
+    /*
+     * QK4_NL is 32. Requiring n to be a multiple of 64 means that nb
+     * is even, so nb % 4 can only be zero or two.
+     */
+    GGML_ASSERT(n % (2 * QK4_NL) == 0);
     Q8<nrc_y, block_q8_2_x4> q8(info);
-    auto m4 = _mm512_set1_epi8(0xf);
-    auto values = load_iq4nl_values_512();
-    int nb = n / QK4_NL;
-    __m512  acc[2*nrc_y] = {};
-    __m512i qx[4];
-    float d8[8*nrc_y];
-    auto prepare = [&qx, &m4, &values] (const block_iq4_nl_r4& iq4l, const block_iq4_nl_r4& iq4h) {
-        auto scales128 = _mm_cvtph_ps(_mm_loadl_epi64((const __m128i *)iq4l.d));
-        auto scales1 = _mm256_set_m128(scales128, scales128);
-        scales128 = _mm_cvtph_ps(_mm_loadl_epi64((const __m128i *)iq4h.d));
-        auto scales2 = _mm256_set_m128(scales128, scales128);
-        auto scales = _mm512_insertf32x8(_mm512_castps256_ps512(scales1), scales2, 1);
-        auto bits1 = _mm512_inserti32x8(_mm512_castsi256_si512(_mm256_loadu_si256((const __m256i *)iq4l.qs+0)),
-                                                               _mm256_loadu_si256((const __m256i *)iq4h.qs+0), 1);
-        auto bits2 = _mm512_inserti32x8(_mm512_castsi256_si512(_mm256_loadu_si256((const __m256i *)iq4l.qs+1)),
-                                                               _mm256_loadu_si256((const __m256i *)iq4h.qs+1), 1);
-        qx[0] = _mm512_shuffle_epi8(values, _mm512_and_si512(bits1, m4));
-        qx[1] = _mm512_shuffle_epi8(values, _mm512_and_si512(bits2, m4));
-        qx[2] = _mm512_shuffle_epi8(values, _mm512_and_si512(_mm512_srli_epi16(bits1, 4), m4));
-        qx[3] = _mm512_shuffle_epi8(values, _mm512_and_si512(_mm512_srli_epi16(bits2, 4), m4));
-        return scales;
-    };
-    auto dot = [&qx] (__m256i y8) {
-        auto y = _mm512_inserti32x8(_mm512_castsi256_si512(y8), y8, 1);
-        auto sumi = _mm512_setzero_si512();
-        sumi = _mm512_dpbusd_epi32(sumi, qx[0], _mm512_shuffle_epi32(y, _MM_PERM_ENUM(0x00)));
-        sumi = _mm512_dpbusd_epi32(sumi, qx[1], _mm512_shuffle_epi32(y, _MM_PERM_ENUM(0x55)));
-        sumi = _mm512_dpbusd_epi32(sumi, qx[2], _mm512_shuffle_epi32(y, _MM_PERM_ENUM(0xaa)));
-        sumi = _mm512_dpbusd_epi32(sumi, qx[3], _mm512_shuffle_epi32(y, _MM_PERM_ENUM(0xff)));
-        return sumi;
-    };
+
+        const __m512i m4 =
+        _mm512_set1_epi8(0x0f);
+
+    const __m512i eight =
+        _mm512_set1_epi8(8);
+
+    const __m512i zero =
+        _mm512_setzero_si512();
+
+    const __m512i abs_values =
+        load_iq4nl_abs_values_512();
+
+    const int nb = n / QK4_NL;
+
+    GGML_ASSERT((nb & 1) == 0);
+
+    /*
+     * One accumulator per right-hand-side row.
+     *
+     * The previous positive-IQ4 implementation required:
+     *
+     *   acc[0] = scaled dot product
+     *   acc[1] = scaled sum of Q8 quants
+     *
+     * followed by:
+     *
+     *   acc[0] - 64 * acc[1]
+     *
+     * This implementation calculates the signed IQ4 dot product
+     * directly, so the auxiliary accumulator is unnecessary.
+     */
+    __m512 acc[nrc_y] = {};
+
+    /*
+     * Prepared unsigned IQ4 magnitudes and their corresponding
+     * negative-value masks.
+     *
+     * prepare() fills these, and dot() consumes them.
+     */
+    __m512i qx_abs[4];
+    __mmask64 qx_negative[4];
+
+    /*
+     * The packed four-block Q8 representation provides eight converted
+     * values. The first four are the BF16 block scales. The final four
+     * relate to the stored Q8 sums and are not used by this signed-IQ4
+     * implementation.
+     */
+    float d8[8 * nrc_y];
+    
+    auto prepare =
+        [&qx_abs, &qx_negative, &abs_values, &m4, &eight]
+        (const block_iq4_nl_r4& iq4l,
+         const block_iq4_nl_r4& iq4h) -> __m512 {
+            /*
+             * Each IQ4 block contains four FP16 scales.
+             *
+             * iq4l represents output rows ix + 0..3.
+             * iq4h represents output rows ix + 4..7.
+             *
+             * Duplicate each set of four scales within its 256-bit half:
+             *
+             *   [l0 l1 l2 l3 l0 l1 l2 l3 |
+             *    h0 h1 h2 h3 h0 h1 h2 h3]
+             */
+            __m128 scales128 =
+                _mm_cvtph_ps(
+                    _mm_loadl_epi64(
+                        (const __m128i *)iq4l.d));
+
+            const __m256 scales1 =
+                _mm256_set_m128(scales128, scales128);
+
+            scales128 =
+                _mm_cvtph_ps(
+                    _mm_loadl_epi64(
+                        (const __m128i *)iq4h.d));
+
+            const __m256 scales2 =
+                _mm256_set_m128(scales128, scales128);
+
+            const __m512 scales =
+                _mm512_insertf32x8(
+                    _mm512_castps256_ps512(scales1),
+                    scales2,
+                    1);
+
+            /*
+             * Combine the IQ4 data for all eight output rows.
+             *
+             * The low 256 bits contain rows ix + 0..3.
+             * The high 256 bits contain rows ix + 4..7.
+             */
+            const __m512i bits1 =
+                _mm512_inserti32x8(
+                    _mm512_castsi256_si512(
+                        _mm256_loadu_si256(
+                            (const __m256i *)iq4l.qs + 0)),
+                    _mm256_loadu_si256(
+                        (const __m256i *)iq4h.qs + 0),
+                    1);
+
+            const __m512i bits2 =
+                _mm512_inserti32x8(
+                    _mm512_castsi256_si512(
+                        _mm256_loadu_si256(
+                            (const __m256i *)iq4l.qs + 1)),
+                    _mm256_loadu_si256(
+                        (const __m256i *)iq4h.qs + 1),
+                    1);
+
+            /*
+             * Extract the four nibble streams.
+             */
+            const __m512i idx0 =
+                _mm512_and_si512(bits1, m4);
+
+            const __m512i idx1 =
+                _mm512_and_si512(bits2, m4);
+
+            const __m512i idx2 =
+                _mm512_and_si512(
+                    _mm512_srli_epi16(bits1, 4),
+                    m4);
+
+            const __m512i idx3 =
+                _mm512_and_si512(
+                    _mm512_srli_epi16(bits2, 4),
+                    m4);
+
+            /*
+             * Look up unsigned IQ4 magnitudes directly.
+             *
+             * This avoids first looking up signed IQ4 values and then
+             * executing VPABSB on each result.
+             */
+            qx_abs[0] =
+                _mm512_shuffle_epi8(abs_values, idx0);
+
+            qx_abs[1] =
+                _mm512_shuffle_epi8(abs_values, idx1);
+
+            qx_abs[2] =
+                _mm512_shuffle_epi8(abs_values, idx2);
+
+            qx_abs[3] =
+                _mm512_shuffle_epi8(abs_values, idx3);
+
+            /*
+             * Indices 0..7 select negative IQ4 values.
+             * Indices 8..15 select positive IQ4 values.
+             *
+             * VPCMPUB writes directly to mask registers, which are then
+             * consumed by the masked Q8 negations in dot().
+             */
+            qx_negative[0] =
+                _mm512_cmp_epu8_mask(
+                    idx0, eight, _MM_CMPINT_LT);
+
+            qx_negative[1] =
+                _mm512_cmp_epu8_mask(
+                    idx1, eight, _MM_CMPINT_LT);
+
+            qx_negative[2] =
+                _mm512_cmp_epu8_mask(
+                    idx2, eight, _MM_CMPINT_LT);
+
+            qx_negative[3] =
+                _mm512_cmp_epu8_mask(
+                    idx3, eight, _MM_CMPINT_LT);
+
+            return scales;
+        };
+    
+    auto dot =
+        [&qx_abs, &qx_negative, &zero]
+        (__m256i y8) -> __m512i {
+            /*
+             * Duplicate the same Q8 block for the low and high groups
+             * of four output rows.
+             */
+            const __m512i y =
+                _mm512_inserti32x8(
+                    _mm512_castsi256_si512(y8),
+                    y8,
+                    1);
+
+            /*
+             * Replicate the four Q8 dwords required by the four IQ4
+             * nibble streams.
+             */
+            const __m512i y0 =
+                _mm512_shuffle_epi32(
+                    y, _MM_PERM_ENUM(0x00));
+
+            const __m512i y1 =
+                _mm512_shuffle_epi32(
+                    y, _MM_PERM_ENUM(0x55));
+
+            const __m512i y2 =
+                _mm512_shuffle_epi32(
+                    y, _MM_PERM_ENUM(0xaa));
+
+            const __m512i y3 =
+                _mm512_shuffle_epi32(
+                    y, _MM_PERM_ENUM(0xff));
+
+            /*
+             * Emulate a signed-byte by signed-byte dot product using
+             * VPDPBUSD:
+             *
+             *   x * y = abs(x) * (x < 0 ? -y : y)
+             *
+             * qx_abs is unsigned, as required by VPDPBUSD.
+             * sy is signed, also as required by VPDPBUSD.
+             *
+             * Q8 quants are assumed to be in [-127, 127], so negating
+             * a Q8 value cannot encounter the int8_t -128 case.
+             */
+            const __m512i sy0 =
+                _mm512_mask_sub_epi8(
+                    y0,
+                    qx_negative[0],
+                    zero,
+                    y0);
+
+            const __m512i sy1 =
+                _mm512_mask_sub_epi8(
+                    y1,
+                    qx_negative[1],
+                    zero,
+                    y1);
+
+            const __m512i sy2 =
+                _mm512_mask_sub_epi8(
+                    y2,
+                    qx_negative[2],
+                    zero,
+                    y2);
+
+            const __m512i sy3 =
+                _mm512_mask_sub_epi8(
+                    y3,
+                    qx_negative[3],
+                    zero,
+                    y3);
+
+            __m512i sumi =
+                _mm512_setzero_si512();
+
+            sumi =
+                _mm512_dpbusd_epi32(
+                    sumi,
+                    qx_abs[0],
+                    sy0);
+
+            sumi =
+                _mm512_dpbusd_epi32(
+                    sumi,
+                    qx_abs[1],
+                    sy1);
+
+            sumi =
+                _mm512_dpbusd_epi32(
+                    sumi,
+                    qx_abs[2],
+                    sy2);
+
+            sumi =
+                _mm512_dpbusd_epi32(
+                    sumi,
+                    qx_abs[3],
+                    sy3);
+
+            return sumi;
+        };
+    
     for (int ix = 0; ix < nrc_x; ix += 8) {
-        const block_iq4_nl_r4 * iq4l = (const block_iq4_nl_r4 *)((const char *)vx + (ix+0)*bx);
-        const block_iq4_nl_r4 * iq4h = (const block_iq4_nl_r4 *)((const char *)vx + (ix+4)*bx);
-        for (int ib4 = 0; ib4 < nb/4; ++ib4) {
+        const block_iq4_nl_r4 * iq4l =
+            (const block_iq4_nl_r4 *)(
+                (const char *)vx + (ix + 0) * bx);
+
+        const block_iq4_nl_r4 * iq4h =
+            (const block_iq4_nl_r4 *)(
+                (const char *)vx + (ix + 4) * bx);
+
+        /*
+         * Process four consecutive 32-element blocks per iteration:
+         *
+         *   4 * QK4_NL = 4 * 32 = 128 elements.
+         */
+        const int nb4 = nb / 4;
+
+        for (int ib4 = 0; ib4 < nb4; ++ib4) {
+            /*
+             * Convert the packed BF16 Q8_2 scale data.
+             *
+             * Only d8[8*iy + 0..3] is needed here. The values in
+             * d8[8*iy + 4..7] correspond to the Q8 sum information used
+             * by the old positively-biased IQ4 implementation.
+             */
             for (int iy = 0; iy < nrc_y; ++iy) {
-                _mm256_storeu_ps(d8+8*iy, convert_scales((const uint16_t *)q8.y[iy][ib4].d));
+                _mm256_storeu_ps(
+                    d8 + 8 * iy,
+                    convert_scales(
+                        (const uint16_t *)
+                            q8.y[iy][ib4].d));
             }
+
             for (int k = 0; k < 4; ++k) {
-                auto scales = prepare(iq4l[4*ib4+k], iq4h[4*ib4+k]);
+                const int ib = 4 * ib4 + k;
+
+                const __m512 scales =
+                    prepare(
+                        iq4l[ib],
+                        iq4h[ib]);
+
                 for (int iy = 0; iy < nrc_y; ++iy) {
-                    auto sumi = dot(_mm256_loadu_si256((const __m256i*)q8.y[iy][ib4].qs+k));
-                    auto dy = _mm512_set1_ps(d8[8*iy+k]);
-                    acc[2*iy+0] = _mm512_fmadd_ps(_mm512_mul_ps(scales, dy), _mm512_cvtepi32_ps(sumi), acc[2*iy+0]);
-                    acc[2*iy+1] = _mm512_fmadd_ps(scales, _mm512_set1_ps(d8[8*iy+k+4]), acc[2*iy+1]);
+                    const __m256i y8 =
+                        _mm256_loadu_si256(
+                            (const __m256i *)
+                                q8.y[iy][ib4].qs + k);
+
+                    const __m512i sumi =
+                        dot(y8);
+
+                    const __m512 dy =
+                        _mm512_set1_ps(
+                            d8[8 * iy + k]);
+
+                    acc[iy] =
+                        _mm512_fmadd_ps(
+                            _mm512_mul_ps(scales, dy),
+                            _mm512_cvtepi32_ps(sumi),
+                            acc[iy]);
                 }
             }
         }
-        for (int ib = 4*(nb/4); ib < nb; ++ib) {
-            auto scales = prepare(iq4l[ib], iq4h[ib]);
-            for (int iy = 0; iy < nrc_y; ++iy) {
-                auto qy = (const block_q8_2 *)q8.y[iy];
-                auto sumi = dot(_mm256_loadu_si256((const __m256i*)qy[ib].qs));
-                float   d = GGML_BF16_TO_FP32(ggml_bf16_t{qy[ib].d});
-                int16_t m = *(const int16_t *)&qy[ib].s;
-                auto dy = _mm512_set1_ps(d);
-                acc[2*iy+0] = _mm512_fmadd_ps(_mm512_mul_ps(scales, dy), _mm512_cvtepi32_ps(sumi), acc[2*iy+0]);
-                acc[2*iy+1] = _mm512_fmadd_ps(scales, _mm512_set1_ps(d*m), acc[2*iy+1]);
-            }
-        }
-        for (int iy = 0; iy < nrc_y; ++iy) {
-            auto sum512 = _mm512_fmadd_ps(_mm512_set1_ps(-64.f), acc[2*iy+1], acc[2*iy+0]);
-            acc[2*iy+0] = acc[2*iy+1] = _mm512_setzero_ps();
-            auto sum1 = _mm_add_ps(_mm512_extractf32x4_ps(sum512, 0), _mm512_extractf32x4_ps(sum512, 1));
-            auto sum2 = _mm_add_ps(_mm512_extractf32x4_ps(sum512, 2), _mm512_extractf32x4_ps(sum512, 3));
-            info.store(ix+0, iy, sum1);
-            info.store(ix+4, iy, sum2);
-        }
-    }
-}
-#else
-template <int nrc_y>
-static void mul_mat_iq4_nl_r4_q8_2(int n, const void * vx, size_t bx, const DataInfo& info, int nrc_x) {
-    GGML_ASSERT(nrc_x%4 == 0);
-    Q8<nrc_y, block_q8_2_x4> q8(info);
-    auto m4 = _mm256_set1_epi8(0xf);
-#ifndef HAVE_VNNI256
-    auto m1 = _mm256_set1_epi16(1);
-#endif
-    auto values128 = _mm_loadu_si128((const __m128i *)iq4k_values);
-    auto values = MM256_SET1_M128I(values128);
-    int nb = n / QK4_NL;
-    __m256 acc[nrc_y] = {};
-    __m256i qs[4];
-    float d8[4*nrc_y];
-    auto prepare = [&qs, &values, &m4] (const block_iq4_nl_r4& iq4) {
-        auto scales128 = _mm_cvtph_ps(_mm_loadl_epi64((const __m128i *)iq4.d));
-        auto scales = _mm256_set_m128(scales128, scales128);
-        auto bits1 = _mm256_loadu_si256((const __m256i *)iq4.qs+0);
-        auto bits2 = _mm256_loadu_si256((const __m256i *)iq4.qs+1);
-        qs[0] = _mm256_shuffle_epi8(values, _mm256_and_si256(bits1, m4));
-        qs[1] = _mm256_shuffle_epi8(values, _mm256_and_si256(bits2, m4));
-        qs[2] = _mm256_shuffle_epi8(values, _mm256_and_si256(_mm256_srli_epi16(bits1, 4), m4));
-        qs[3] = _mm256_shuffle_epi8(values, _mm256_and_si256(_mm256_srli_epi16(bits2, 4), m4));
-        return scales;
-    };
-#ifdef HAVE_VNNI256
-    auto dot = [&qs] (__m256i y) {
-        auto sumi = _mm256_setzero_si256();
-        sumi = ggml_mm256_dpbusd_epi32(sumi, _mm256_sign_epi8(qs[0], qs[0]), _mm256_sign_epi8(_mm256_shuffle_epi32(y, 0x00), qs[0]));
-        sumi = ggml_mm256_dpbusd_epi32(sumi, _mm256_sign_epi8(qs[1], qs[1]), _mm256_sign_epi8(_mm256_shuffle_epi32(y, 0x55), qs[1]));
-        sumi = ggml_mm256_dpbusd_epi32(sumi, _mm256_sign_epi8(qs[2], qs[2]), _mm256_sign_epi8(_mm256_shuffle_epi32(y, 0xaa), qs[2]));
-        sumi = ggml_mm256_dpbusd_epi32(sumi, _mm256_sign_epi8(qs[3], qs[3]), _mm256_sign_epi8(_mm256_shuffle_epi32(y, 0xff), qs[3]));
-        return sumi;
-    };
-#else
-    auto dot = [&qs, &m1] (__m256i y) {
-        auto u1 = _mm256_sign_epi8(qs[0], qs[0]);
-        auto u2 = _mm256_sign_epi8(qs[1], qs[1]);
-        auto sumi1 = _mm256_add_epi32(
-                _mm256_madd_epi16(m1, _mm256_maddubs_epi16(u1, _mm256_sign_epi8(_mm256_shuffle_epi32(y, 0x00), qs[0]))),
-                _mm256_madd_epi16(m1, _mm256_maddubs_epi16(u2, _mm256_sign_epi8(_mm256_shuffle_epi32(y, 0x55), qs[1]))));
-        u1 = _mm256_sign_epi8(qs[2], qs[2]);
-        u2 = _mm256_sign_epi8(qs[3], qs[3]);
-        auto sumi2 = _mm256_add_epi32(
-                _mm256_madd_epi16(m1, _mm256_maddubs_epi16(u1, _mm256_sign_epi8(_mm256_shuffle_epi32(y, 0xaa), qs[2]))),
-                _mm256_madd_epi16(m1, _mm256_maddubs_epi16(u2, _mm256_sign_epi8(_mm256_shuffle_epi32(y, 0xff), qs[3]))));
-        return _mm256_add_epi32(sumi1, sumi2);
-    };
-#endif
-    for (int ix = 0; ix < nrc_x; ix += 4) {
-        const block_iq4_nl_r4 * iq4 = (const block_iq4_nl_r4 *)((const char *)vx + ix*bx);
-        for (int ib4 = 0; ib4 < nb/4; ++ib4) {
-            for (int iy = 0; iy < nrc_y; ++iy) {
-                auto aux = _mm_slli_epi32(_mm_cvtepu16_epi32(_mm_loadl_epi64((const __m128i *)q8.y[iy][ib4].d)), 16);
-                _mm_storeu_ps(d8+4*iy, _mm_castsi128_ps(aux));
-            }
-            for (int k = 0; k < 4; ++k) {
-                auto scales = prepare(iq4[4*ib4+k]);
+
+        /*
+         * Because nb is even, the remainder after processing groups of
+         * four can only be zero or two.
+         *
+         * This is a specialised two-block epilogue rather than a generic
+         * one-block-at-a-time tail loop.
+         */
+        if (nb & 2) {
+            const int ib = 4 * nb4;
+
+            /*
+             * First remaining 32-element block.
+             */
+            {
+                const __m512 scales =
+                    prepare(
+                        iq4l[ib + 0],
+                        iq4h[ib + 0]);
+
                 for (int iy = 0; iy < nrc_y; ++iy) {
-                    auto sumi = dot(_mm256_loadu_si256((const __m256i*)q8.y[iy][ib4].qs+k));
-                    auto d4d8 = _mm256_mul_ps(scales, _mm256_set1_ps(d8[4*iy+k]));
-                    acc[iy] = _mm256_fmadd_ps(d4d8, _mm256_cvtepi32_ps(sumi), acc[iy]);
+                    const block_q8_2 * qy =
+                        (const block_q8_2 *)q8.y[iy];
+
+                    const __m256i y8 =
+                        _mm256_loadu_si256(
+                            (const __m256i *)
+                                qy[ib + 0].qs);
+
+                    const __m512i sumi =
+                        dot(y8);
+
+                    /*
+                     * Q8_2 stores:
+                     *
+                     *   d : BF16 scale
+                     *   s : int16_t sum of Q8 quants
+                     *
+                     * The sum is intentionally unused because this path
+                     * computes the signed IQ4 dot product directly.
+                     */
+                    const float d =
+                        GGML_BF16_TO_FP32(
+                            ggml_bf16_t{
+                                qy[ib + 0].d
+                            });
+
+                    acc[iy] =
+                        _mm512_fmadd_ps(
+                            _mm512_mul_ps(
+                                scales,
+                                _mm512_set1_ps(d)),
+                            _mm512_cvtepi32_ps(sumi),
+                            acc[iy]);
+                }
+            }
+
+            /*
+             * Second remaining 32-element block.
+             */
+            {
+                const __m512 scales =
+                    prepare(
+                        iq4l[ib + 1],
+                        iq4h[ib + 1]);
+
+                for (int iy = 0; iy < nrc_y; ++iy) {
+                    const block_q8_2 * qy =
+                        (const block_q8_2 *)q8.y[iy];
+
+                    const __m256i y8 =
+                        _mm256_loadu_si256(
+                            (const __m256i *)
+                                qy[ib + 1].qs);
+
+                    const __m512i sumi =
+                        dot(y8);
+
+                    const float d =
+                        GGML_BF16_TO_FP32(
+                            ggml_bf16_t{
+                                qy[ib + 1].d
+                            });
+
+                    acc[iy] =
+                        _mm512_fmadd_ps(
+                            _mm512_mul_ps(
+                                scales,
+                                _mm512_set1_ps(d)),
+                            _mm512_cvtepi32_ps(sumi),
+                            acc[iy]);
                 }
             }
         }
-        for (int ib = 4*(nb/4); ib < nb; ++ib) {
-            auto scales = prepare(iq4[ib]);
-            for (int iy = 0; iy < nrc_y; ++iy) {
-                auto qy = (const block_q8_1 *)q8.y[iy];
-                auto sumi = dot(_mm256_loadu_si256((const __m256i*)qy[ib].qs));
-                ggml_bf16_t d{qy[ib].d};
-                auto d4d8 = _mm256_mul_ps(scales, _mm256_set1_ps(GGML_BF16_TO_FP32(d)));
-                acc[iy] = _mm256_fmadd_ps(d4d8, _mm256_cvtepi32_ps(sumi), acc[iy]);
-            }
-        }
+
+        /*
+         * Reduce the duplicated scale lanes:
+         *
+         *   lanes 0..3  + lanes 4..7   -> rows ix + 0..3
+         *   lanes 8..11 + lanes 12..15 -> rows ix + 4..7
+         *
+         * There is no -64 * auxiliary-accumulator correction here.
+         */
         for (int iy = 0; iy < nrc_y; ++iy) {
-            auto sum = _mm_add_ps(_mm256_castps256_ps128(acc[iy]), _mm256_extractf128_ps(acc[iy], 1));
-            info.store(ix, iy, sum);
-            acc[iy] = _mm256_setzero_ps();
+            const __m512 sum512 = acc[iy];
+
+            acc[iy] =
+                _mm512_setzero_ps();
+
+            const __m128 sum1 =
+                _mm_add_ps(
+                    _mm512_extractf32x4_ps(sum512, 0),
+                    _mm512_extractf32x4_ps(sum512, 1));
+
+            const __m128 sum2 =
+                _mm_add_ps(
+                    _mm512_extractf32x4_ps(sum512, 2),
+                    _mm512_extractf32x4_ps(sum512, 3));
+
+            info.store(ix + 0, iy, sum1);
+            info.store(ix + 4, iy, sum2);
         }
     }
 }
