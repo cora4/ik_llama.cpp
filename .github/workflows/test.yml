@@ -22,18 +22,18 @@ jobs:
                   # exit 1
                 else
                   echo "Architecture: Emerald Rapids"
-                  exit 1
+                  # exit 1
                 fi
             #    wget -q https://github.com/cora4/ik_llama.cpp/releases/download/spr-18-15448/llama-latest-bin-ubuntu-spr.zip
             fi
             #else
                 echo "Architecture: Ice Lake"
-                wget -q https://github.com/cora4/ik_llama.cpp/releases/download/icl-12-5481/llama-latest-bin-ubuntu-icl.zip
+                wget -q https://github.com/cora4/ik_llama.cpp/releases/download/tgl-27-28241/llama-latest-bin-ubuntu-tgl.zip
                 
-                #wget -q https://github.com/cora4/ik_llama.cpp/releases/download/icl-14-18292/llama-latest-bin-ubuntu-icl.zip -O llama-icl-avx-256-mxfp4.zip
-                #wget -q https://github.com/cora4/ik_llama.cpp/releases/download/icl-16-27970/llama-latest-bin-ubuntu-icl.zip -O llama-icl-avx-256-iq4_xs-avx256.zip
-                #unzip -qo llama-icl-avx-256-mxfp4.zip -d /tmp/2/
-                #unzip -qo llama-icl-avx-256-iq4_xs-avx256.zip -d /tmp/3/
+                wget -q https://github.com/cora4/ik_llama.cpp/releases/download/tgl-28-22027/llama-latest-bin-ubuntu-tgl.zip -O llama-tgl-avx-512-iq4_nl_r4.zip
+                wget -q https://github.com/cora4/ik_llama.cpp/releases/download/tgl-8-10520/llama-latest-bin-ubuntu-tgl.zip -O llama-tgl-avx-256-iq4_nl_r4.zip
+                unzip -qo llama-tgl-avx-512-iq4_nl_r4.zip -d /tmp/2/
+                unzip -qo llama-tgl-avx-256-iq4_nl_r4.zip -d /tmp/3/
             #fi
         else
           if grep -q "AMD" /proc/cpuinfo; then
@@ -59,7 +59,7 @@ jobs:
         unzip -o llama-latest-bin-ubuntu-zen3.zip -d /tmp/
         tar --no-overwrite-dir -xf llama-prism-b9596-9fcaed7-bin-ubuntu-x64.tar.gz -C /tmp/ || true
         # rm /tmp/llama-prism-b9596-9fcaed7/libggml-cpu-sapphirerapids.so
-        # rm /tmp/llama-prism-b9596-9fcaed7/libggml-cpu-zen4.so
+        rm /tmp/llama-prism-b9596-9fcaed7/libggml-cpu-zen4.so
         rm /tmp/llama-prism-b9596-9fcaed7/libggml-cpu-alderlake.so
         rm /tmp/llama-prism-b9596-9fcaed7/libggml-cpu-cooperlake.so
         
@@ -146,11 +146,21 @@ jobs:
       run: |
         echo "Benchmarking Quantised Model (Latest):"
         /tmp/llama-latest/llama-bench -m /tmp/qwen3-4B-IQ4_NL.gguf
+
+    - name: Benchmark Models (latest) IQ4_NL (-rtr 1) (AVX-256)
+      run: |
+        echo "Benchmarking Quantised Model (Latest):"
+        /tmp/3/llama-latest/llama-bench -rtr 1 -m /tmp/qwen3-4B-IQ4_NL.gguf
+    
+    - name: Benchmark Models (latest) IQ4_NL (-rtr 1) (AVX-512)
+      run: |
+        echo "Benchmarking Quantised Model (Latest):"
+        /tmp/2/llama-latest/llama-bench -rtr 1 -m /tmp/qwen3-4B-IQ4_NL.gguf           
         
     - name: Benchmark Models (latest) IQ4_NL (-rtr 1)
       run: |
         echo "Benchmarking Quantised Model (Latest):"
-        /tmp/llama-latest/llama-bench -rtr 1 -m /tmp/qwen3-4B-IQ4_NL.gguf   
+        /tmp/llama-latest/llama-bench -rtr 1 -m /tmp/qwen3-4B-IQ4_NL.gguf
 
     - name: Benchmark Models (Prism) IQ4_NL
       run: |
