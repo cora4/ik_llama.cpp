@@ -28,7 +28,7 @@ jobs:
             fi
             #else
                 echo "Architecture: Ice Lake"
-                wget -q https://github.com/cora4/ik_llama.cpp/releases/download/tgl-29-15730/llama-latest-bin-ubuntu-tgl.zip
+                wget -q https://github.com/cora4/ik_llama.cpp/releases/download/tgl-30-8856/llama-latest-bin-ubuntu-tgl.zip
                 
                 wget -q https://github.com/cora4/ik_llama.cpp/releases/download/tgl-28-22027/llama-latest-bin-ubuntu-tgl.zip -O llama-tgl-avx-512-iq4_nl_r4.zip
                 wget -q https://github.com/cora4/ik_llama.cpp/releases/download/tgl-8-10520/llama-latest-bin-ubuntu-tgl.zip -O llama-tgl-avx-256-iq4_nl_r4.zip
