@@ -318,7 +318,7 @@ class SimpleChat {
     }
 
     /**
-     * Allow setting of system prompt, but only at beginning.
+     * Allow setting of system prompt, but only at begining.
      * @param {string} sysPrompt
      * @param {string} msgTag
      */
