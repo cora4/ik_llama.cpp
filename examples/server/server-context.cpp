@@ -73,7 +73,8 @@ static bool server_response_needs_chat_parse(oaicompat_type oaicompat) {
 }
 
 static bool server_speculative_uses_target_features(const common_params_speculative & spec) {
-    return spec.uses_target_features();
+    return spec.has_stage_type(COMMON_SPECULATIVE_TYPE_MTP) ||
+           spec.has_stage_type(COMMON_SPECULATIVE_TYPE_DFLASH);
 }
 
 static bool server_speculative_requires_single_slot(const common_params_speculative & spec) {
