@@ -24,8 +24,9 @@
 #endif
 
 #include <nlohmann/json.hpp>
-#include "index.html.gz.hpp"
-#include "index_llamacpp.html.gz.hpp"
+#include "index.html.hpp"
+#include "bundle.js.hpp"
+#include "bundle.css.hpp"
 #include "loading.html.hpp"
 
 #include <atomic>
@@ -2090,7 +2091,7 @@ int main(int argc, char ** argv) {
             // register static assets routes
             if (!params.public_path.empty()) {
                 // Set the base directory for serving static files
-                bool is_found = svr->set_mount_point("/", params.public_path);
+                bool is_found = svr->set_mount_point(params.api_prefix + "/", params.public_path);
                 if (!is_found) {
                     GGML_ABORT("%s: static assets path not found: %s\n", __func__, params.public_path.c_str());
                     return 1;
@@ -2099,91 +2100,85 @@ int main(int argc, char ** argv) {
             else {
 
                 // using embedded static index.html
-                svr->Get("/", [params](const httplib::Request& req, httplib::Response& res) {
-                    if (req.get_header_value("Accept-Encoding").find("gzip") == std::string::npos) {
-                        res.set_content("Error: gzip is not supported by this browser", "text/plain");
-                    }
-                    else {
-                        res.set_header("Content-Encoding", "gzip");
-                        // COEP and COOP headers, required by pyodide (python interpreter)
-                        res.set_header("Cross-Origin-Embedder-Policy", "require-corp");
-                        res.set_header("Cross-Origin-Opener-Policy", "same-origin");
-                        if (params.webui == COMMON_WEBUI_AUTO) {
-                            res.set_content(reinterpret_cast<const char*>(index_html_gz), index_html_gz_len, "text/html; charset=utf-8");
-                        }
-                        else if (params.webui == COMMON_WEBUI_LLAMACPP) {
-                            res.set_content(reinterpret_cast<const char*>(index_llamacpp_html_gz), index_llamacpp_html_gz_len, "text/html; charset=utf-8");
-                        }
-                        else {
-                            res.set_content(reinterpret_cast<const char*>(index_html_gz), index_html_gz_len, "text/html; charset=utf-8");
-                        }
-                    }
+            svr->Get(params.api_prefix + "/", [](const httplib::Request & /*req*/, httplib::Response & res) {
+                // COEP and COOP headers, required by pyodide (python interpreter)
+                res.set_header("Cross-Origin-Embedder-Policy", "require-corp");
+                res.set_header("Cross-Origin-Opener-Policy", "same-origin");
+                res.set_content(reinterpret_cast<const char*>(index_html), index_html_len, "text/html; charset=utf-8");
+                return false;
+            });
+            svr->Get(params.api_prefix + "/bundle.js", [](const httplib::Request & /*req*/, httplib::Response & res) {
+                res.set_content(reinterpret_cast<const char*>(bundle_js), bundle_js_len, "application/javascript; charset=utf-8");
+                return false;
+            });
+            svr->Get(params.api_prefix + "/bundle.css", [](const httplib::Request & /*req*/, httplib::Response & res) {
+                res.set_content(reinterpret_cast<const char*>(bundle_css), bundle_css_len, "text/css; charset=utf-8");
                     return false;
                     });
             }
         }
     }
     // register API routes
-    svr->Get ("/health",              handle_health);
-    svr->Get ("/metrics",             handle_metrics);
-    svr->Get ("/props",               handle_props);
-    svr->Get("/v1/props",             handle_props_simple);
-    svr->Get ("/v1/models",           handle_models);
-    svr->Get ("/models",              handle_models);
-    svr->Post("/completion",          handle_completions); // legacy
-    svr->Post("/completions", handle_completions); // legacy
-    svr->Post("/v1/completions",     handle_completions_oai);
-    svr->Post("/chat/completions",    handle_chat_completions);
-    svr->Post("/v1/chat/completions", handle_chat_completions);
-    svr->Post("/v1/responses",        handle_responses);
-    svr->Post("/responses",           handle_responses);
-    svr->Post("/v1/messages",         handle_anthropic_messages);
-    svr->Post("/v1/messages/count_tokens", handle_anthropic_count_tokens);
-    svr->Post("/infill",              handle_infill);
-    svr->Post("/embedding",           handle_embeddings); // legacy
-    svr->Post("/embeddings",          handle_embeddings);
-    svr->Post("/v1/embeddings",       handle_embeddings_oai);
-    svr->Post("/tokenize",            handle_tokenize);
-    svr->Post("/detokenize",          handle_detokenize);
-    svr->Post("/apply-template",      handle_apply_template);
+    svr->Get (params.api_prefix + "/health",              handle_health);
+    svr->Get (params.api_prefix + "/metrics",             handle_metrics);
+    svr->Get (params.api_prefix + "/props",               handle_props);
+    svr->Get(params.api_prefix + "/v1/props",             handle_props_simple);
+    svr->Get (params.api_prefix + "/v1/models",           handle_models);
+    svr->Get (params.api_prefix + "/models",              handle_models);
+    svr->Post(params.api_prefix + "/completion",          handle_completions); // legacy
+    svr->Post(params.api_prefix + "/completions", handle_completions); // legacy
+    svr->Post(params.api_prefix + "/v1/completions",     handle_completions_oai);
+    svr->Post(params.api_prefix + "/chat/completions",    handle_chat_completions);
+    svr->Post(params.api_prefix + "/v1/chat/completions", handle_chat_completions);
+    svr->Post(params.api_prefix + "/v1/responses",        handle_responses);
+    svr->Post(params.api_prefix + "/responses",           handle_responses);
+    svr->Post(params.api_prefix + "/v1/messages",         handle_anthropic_messages);
+    svr->Post(params.api_prefix + "/v1/messages/count_tokens", handle_anthropic_count_tokens);
+    svr->Post(params.api_prefix + "/infill",              handle_infill);
+    svr->Post(params.api_prefix + "/embedding",           handle_embeddings); // legacy
+    svr->Post(params.api_prefix + "/embeddings",          handle_embeddings);
+    svr->Post(params.api_prefix + "/v1/embeddings",       handle_embeddings_oai);
+    svr->Post(params.api_prefix + "/tokenize",            handle_tokenize);
+    svr->Post(params.api_prefix + "/detokenize",          handle_detokenize);
+    svr->Post(params.api_prefix + "/apply-template",      handle_apply_template);
     // LoRA adapters hotswap
-    svr->Get ("/lora-adapters",       handle_lora_adapters_list);
-    svr->Post("/lora-adapters",       handle_lora_adapters_apply);
+    svr->Get (params.api_prefix + "/lora-adapters",       handle_lora_adapters_list);
+    svr->Post(params.api_prefix + "/lora-adapters",       handle_lora_adapters_apply);
     // Control vectors
-    svr->Get ("/control-vectors",       handle_control_vectors_list);
-    svr->Post("/control-vectors/load",   handle_control_vectors_load);
-    svr->Post("/control-vectors/unload", handle_control_vectors_unload);
-    svr->Post("/control-vectors/apply",  handle_control_vectors_apply);
+    svr->Get (params.api_prefix + "/control-vectors",       handle_control_vectors_list);
+    svr->Post(params.api_prefix + "/control-vectors/load",   handle_control_vectors_load);
+    svr->Post(params.api_prefix + "/control-vectors/unload", handle_control_vectors_unload);
+    svr->Post(params.api_prefix + "/control-vectors/apply",  handle_control_vectors_apply);
     // Save & load slots
-    svr->Get ("/slots",               handle_slots);
-    svr->Get ("/slots/list",          list_slot_prompts);
+    svr->Get (params.api_prefix + "/slots",               handle_slots);
+    svr->Get (params.api_prefix + "/slots/list",          list_slot_prompts);
     if (!params.slot_save_path.empty()) {
         // these endpoints rely on slot_save_path existing
-        svr->Post("/slots/:id_slot",  handle_slots_action);
-        svr->Get ("/list",            list_saved_prompts);
-        svr->Post("/delete_prompt",   delete_saved_prompt);
-        svr->Post("/rename_prompt",   rename_saved_prompt);
+        svr->Post(params.api_prefix + "/slots/:id_slot",  handle_slots_action);
+        svr->Get (params.api_prefix + "/list",            list_saved_prompts);
+        svr->Post(params.api_prefix + "/delete_prompt",   delete_saved_prompt);
+        svr->Post(params.api_prefix + "/rename_prompt",   rename_saved_prompt);
 
     }
 
-    svr->Get ("/version", handle_version);
+    svr->Get (params.api_prefix + "/version", handle_version);
     if (!params.sql_save_file.empty()) {
         // these endpoints rely on sql_save_file existing
-        svr->Post("/load", handle_load);
-        svr->Post("/save", handle_save);
-        svr->Post("/rename", handle_rename);
-        svr->Post("/all", handle_all);
-        svr->Post("/sessions", handle_sessions);
-        svr->Get ("/sessions", handle_sessions);
-        svr->Post("/delete", handle_delete);
+        svr->Post(params.api_prefix + "/load", handle_load);
+        svr->Post(params.api_prefix + "/save", handle_save);
+        svr->Post(params.api_prefix + "/rename", handle_rename);
+        svr->Post(params.api_prefix + "/all", handle_all);
+        svr->Post(params.api_prefix + "/sessions", handle_sessions);
+        svr->Get (params.api_prefix + "/sessions", handle_sessions);
+        svr->Post(params.api_prefix + "/delete", handle_delete);
         //VACUUM is there for the extension but does not require the extension
-        svr->Get ("/vacuum", handle_vacuum);
+        svr->Get (params.api_prefix + "/vacuum", handle_vacuum);
 #ifdef SQLITE3_MODERN_CPP_SUPPORT
         if (sqlite_extension_loaded) {
-            svr->Get ("/zstd_get_configs", handle_zstd_get_configs);
-            svr->Post("/zstd_incremental_maintenance", handle_zstd_maintenance);
-            svr->Post("/zstd_enable_transparent", handle_zstd_enable);
-            svr->Post("/zstd_update_transparent", handle_zstd_config_update);
+            svr->Get (params.api_prefix + "/zstd_get_configs", handle_zstd_get_configs);
+            svr->Post(params.api_prefix + "/zstd_incremental_maintenance", handle_zstd_maintenance);
+            svr->Post(params.api_prefix + "/zstd_enable_transparent", handle_zstd_enable);
+            svr->Post(params.api_prefix + "/zstd_update_transparent", handle_zstd_config_update);
 	}
 #endif
     }
@@ -2194,8 +2189,8 @@ int main(int argc, char ** argv) {
         SRV_WRN("%s", "CORS proxy is enabled, do not expose server to untrusted environments\n");
         SRV_WRN("%s", "This feature is EXPERIMENTAL and may be removed or changed in future versions\n");
         SRV_WRN("%s", "-----------------\n");
-        svr->Get("/cors-proxy", proxy_handler_get);
-        svr->Post("/cors-proxy", proxy_handler_post);
+        svr->Get(params.api_prefix + "/cors-proxy", proxy_handler_get);
+        svr->Post(params.api_prefix + "/cors-proxy", proxy_handler_post);
     }
     //
     // Start the server
