@@ -3970,7 +3970,11 @@ static std::pair<std::vector<double>, double> get_layer_sizes(const llama_model_
             continue;
         }
         if (name == "dflash_fc.weight" || name == "dflash_hidden_norm.weight" ||
-                name.rfind("dflash_aux_hidden_norm.", 0) == 0) {
+                (model.arch == LLM_ARCH_DFLASH &&
+                (name == "fc.weight" || name == "enc.output_norm.weight")) ||
+                name.rfind("dflash_aux_hidden_norm.", 0) == 0 ||
+                name == "markov_w1.weight" || name == "markov_w2.weight" ||
+                name == "conf_proj.weight" || name == "conf_proj.bias") {
             output_misc_size += size;
             continue;
         }
@@ -4824,7 +4828,7 @@ static bool llm_load_tensors(
     if (model.arch == LLM_ARCH_GEMMA4) {
         llm_scale_gate_inp_s(model, use_mmap_buffer);
     }
-    if ((model.arch == LLM_ARCH_QWEN35 || model.arch == LLM_ARCH_QWEN35MOE || model.arch == LLM_ARCH_DFLASH_DRAFT) && extra_output_type != GGML_TYPE_COUNT) {
+    if ((model.arch == LLM_ARCH_QWEN35 || model.arch == LLM_ARCH_QWEN35MOE || llm_arch_is_dflash_family(model.arch)) && extra_output_type != GGML_TYPE_COUNT) {
         llm_requantize_output_tensor(model, extra_output_type);
     }
 
@@ -6159,7 +6163,7 @@ static int llama_decode_internal(
     // reserve output buffer
     n_outputs_embd = has_mtp && cparams.mtp_op_type == MTP_OP_NONE ? n_tokens_all : n_outputs;
     const size_t required_outputs = std::max<size_t>(n_outputs, n_outputs_embd);
-    const bool is_dflash_decode = lctx.model.arch == LLM_ARCH_DFLASH_DRAFT;
+    const bool is_dflash_decode = llm_arch_is_dflash_family(lctx.model.arch);
     const size_t reserved_outputs = llama_output_reserve(lctx, required_outputs);
     if (reserved_outputs < required_outputs) {
         LLAMA_LOG_ERROR("%s: could not reserve space for batch with %zu outputs\n", __func__, required_outputs);
@@ -6560,7 +6564,7 @@ static int llama_decode_internal(
 
         // extract logits
         {
-            const bool dflash_skip_logits = (lctx.model.arch == LLM_ARCH_DFLASH_DRAFT
+            const bool dflash_skip_logits = (llm_arch_is_dflash_family(lctx.model.arch)
                 && !lctx.dflash.draft_tokens.empty());
             if (dflash_skip_logits) {
                 res = nullptr;
@@ -8820,6 +8824,8 @@ enum llama_rope_type llama_rope_type(const struct llama_model * model) {
         case LLM_ARCH_LAGUNA:
         case LLM_ARCH_GEMMA4:
         case LLM_ARCH_GEMMA4_MTP:
+        case LLM_ARCH_DFLASH:
+            return LLAMA_ROPE_TYPE_NORM;
         case LLM_ARCH_DFLASH_DRAFT:
         case LLM_ARCH_GEMMA4_ASSISTANT:
             return LLAMA_ROPE_TYPE_NEOX;
@@ -9793,13 +9799,18 @@ struct llama_data_write {
         write(&v_state, sizeof(v_state));
         write(&n_layer, sizeof(n_layer));
 
+        const bool openpangu_partial = llama_kv_has_openpangu_partial_state(kv_self, ctx->model.arch, flags);
+
         // Iterate and write all the keys first, each row is a cell
         // Get whole range at a time
         for (uint32_t il = 0; il < n_layer; ++il) {
             const uint32_t n_embd_k_gqa = llama_kv_k_row_embd(ctx->model, hparams, il);
             const uint32_t n_embd_head_qk_rope = hparams.n_rot;
             const uint32_t kv_lora_rank = hparams.n_lora_kv;
-            const bool has_k_cache = kv_self.k_l[il] != nullptr && need_kv;
+            // a compacted layer holds the only copy of its window, so partial state has to carry it.
+            // the openPangu layout is excluded: it records no live_swa(), and seq_rm can move head_swa
+            // between save and restore, so writer and reader would disagree on the row count.
+            const bool has_k_cache = kv_self.k_l[il] != nullptr && (need_kv || (!openpangu_partial && kv_self.is_compacted((int) il)));
 
             // Write key type
             const int32_t k_type_i = has_k_cache ? (int32_t) kv_self.k_l[il]->type : -1;
@@ -9895,7 +9906,6 @@ struct llama_data_write {
             }
         }
 
-        const bool openpangu_partial = llama_kv_has_openpangu_partial_state(kv_self, ctx->model.arch, flags);
         const uint32_t qnext_state = (llama_kv_has_qnext_state_storage(kv_self) || openpangu_partial) ? 1 : 0;
         write(&qnext_state, sizeof(qnext_state));
 
@@ -10437,12 +10447,14 @@ struct llama_data_read {
             return false;
         }
 
+        const bool openpangu_partial = llama_kv_has_openpangu_partial_state(kv_self, ctx->model.arch, flags);
+
         // For each layer, read the keys for each cell, one row is one cell, read as one contiguous block
         for (uint32_t il = 0; il < n_layer; ++il) {
             const uint32_t n_embd_k_gqa = llama_kv_k_row_embd(ctx->model, hparams, il);
             const uint32_t n_embd_head_qk_rope = hparams.n_rot;
             const uint32_t kv_lora_rank = hparams.n_lora_kv;
-            const bool has_k_cache = kv_self.k_l[il] != nullptr && need_kv;
+            const bool has_k_cache = kv_self.k_l[il] != nullptr && (need_kv || (!openpangu_partial && kv_self.is_compacted((int) il)));
 
 
             // Read type of key
@@ -10608,7 +10620,6 @@ struct llama_data_read {
         uint32_t qnext_state_ref = 0;
         read_to(&qnext_state_ref, sizeof(qnext_state_ref));
 
-        const bool openpangu_partial = llama_kv_has_openpangu_partial_state(kv_self, ctx->model.arch, flags);
         const bool has_qnext_state = llama_kv_has_qnext_state_storage(kv_self) || openpangu_partial;
         if ((qnext_state_ref != 0) != has_qnext_state) {
             LLAMA_LOG_ERROR("%s: incompatible qwen3next state cache presence\n", __func__);
