@@ -2319,6 +2319,10 @@ bool llama_model_is_step35(const llama_model * model) {
     return model && model->arch == LLM_ARCH_STEP35;
 }
 
+bool llama_model_is_qwen35_family(const llama_model * model) {
+    return model && (model->arch == LLM_ARCH_QWEN35 || model->arch == LLM_ARCH_QWEN35MOE);
+}
+
 enum llama_mtp_package llama_model_mtp_package(const llama_model * model) {
     if (!model) {
         return LLAMA_MTP_PACKAGE_INVALID;
@@ -2331,13 +2335,15 @@ enum llama_mtp_package llama_model_mtp_package(const llama_model * model) {
     const size_t n_nextn = model->hparams.nextn_predict_layers;
     const bool has_common_package_contract =
         llama_model_is_step35(model) || llama_model_is_deepseek4(model) ||
+        llama_model_is_qwen35_family(model) ||
         llama_model_is_gemma4_mtp_assistant(model);
     if (!has_common_package_contract) {
         return n_nextn > 0 ? LLAMA_MTP_PACKAGE_EMBEDDED : LLAMA_MTP_PACKAGE_NONE;
     }
 
     if (n_nextn == 0) {
-        if (llama_model_is_step35(model) || llama_model_is_deepseek4(model)) {
+        if (llama_model_is_step35(model) || llama_model_is_deepseek4(model) ||
+            llama_model_is_qwen35_family(model)) {
             for (const auto & layer : model->layers) {
                 if (layer.attn_norm != nullptr) {
                     return LLAMA_MTP_PACKAGE_TARGET_ONLY;
@@ -2353,7 +2359,10 @@ enum llama_mtp_package llama_model_mtp_package(const llama_model * model) {
     }
 
     const size_t first = n_layers - n_nextn;
-    const bool has_tail = model->layers[first].nextn.eh_proj != nullptr;
+    // A Qwen3.5 NextN block loads eh_proj, attn_q and the MLP as optional, so none of them
+    // marks a predictor tail on its own; enorm is required and is present in all of them.
+    const bool has_tail = model->layers[first].nextn.eh_proj != nullptr ||
+        (llama_model_is_qwen35_family(model) && model->layers[first].nextn.enorm != nullptr);
 
     bool has_trunk = false;
     for (size_t il = 0; il < first; ++il) {
@@ -2524,7 +2533,9 @@ size_t llama_model::cache_size(int il, ggml_type type_k, ggml_type type_v, ggml_
     }
 
     auto n_head_kv = hparams.n_head_kv(il);
-    auto k_size = ggml_row_size(type_k, hparams.n_embd_head_k(il)) * n_head_kv*kv_size;
-    auto v_size = ggml_row_size(type_v, hparams.n_embd_v_gqa(il)) * kv_size;
+    const uint32_t rows = llama_kv_layer_rows(hparams, il, kv_size, swa_compress && supports_swa_compress(), n_ubatch,
+                                              llama_kv_cache::get_padding(flash_attn));
+    auto k_size = ggml_row_size(type_k, hparams.n_embd_head_k(il)) * n_head_kv*rows;
+    auto v_size = ggml_row_size(type_v, hparams.n_embd_v_gqa(il)) * rows;
     return k_size + v_size;
 }

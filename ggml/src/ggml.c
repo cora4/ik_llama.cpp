@@ -28271,6 +28271,7 @@ struct ggml_cgraph * ggml_new_graph_custom(struct ggml_context * ctx, size_t siz
     assert(obj_size == (size_t)((char *)p - (char *)cgraph));
 
     *cgraph = (struct ggml_cgraph) {
+        /*.uid          =*/ 0ull,
         /*.size         =*/ size,
         /*.n_nodes      =*/ 0,
         /*.n_leafs      =*/ 0,
@@ -28293,6 +28294,7 @@ struct ggml_cgraph * ggml_new_graph(struct ggml_context * ctx) {
 
 struct ggml_cgraph ggml_graph_view(struct ggml_cgraph * cgraph0, int i0, int i1) {
     struct ggml_cgraph cgraph = {
+        /*.uid          =*/ 0ull,
         /*.size         =*/ 0,
         /*.n_nodes      =*/ i1 - i0,
         /*.n_leafs      =*/ 0,
@@ -28972,8 +28974,15 @@ struct ggml_cplan ggml_graph_plan(const struct ggml_cgraph * cgraph, int n_threa
                 } break;
             case GGML_OP_INDEXER_TOPK:
                 {
-                    size_t size = iqk_idx_topk_work_buffer_size(node, n_tasks);
-                    cur = MAX(cur, size);
+                    cur = iqk_idx_topk_work_buffer_size(node, n_tasks);
+                } break;
+            case GGML_OP_DS4_COMP:
+                {
+                    if (node->op_params[0] == 0) {
+                        struct ggml_tensor * idx = node->src[2];
+                        int ratio = idx->ne[0] / (2*node->ne[1]);
+                        cur = 32*(4*ratio + 3)*sizeof(float)*n_tasks;
+                    }
                 } break;
             case GGML_OP_CROSS_ENTROPY_LOSS:
                 {
