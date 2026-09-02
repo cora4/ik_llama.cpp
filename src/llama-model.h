@@ -114,6 +114,7 @@ enum e_model {
     MODEL_33B_A3B,
     MODEL_35B_A3B,
     MODEL_80B_A3B, // Qwen3-Next
+    MODEL_125B_A6B, // Qwen3.8-Flash-Next
     MODEL_80B_A13B,
     MODEL_100B_A6B,
     MODEL_106B_A12B,
@@ -138,6 +139,12 @@ struct llama_layer_nextn {
     struct ggml_tensor * hnorm            = nullptr;
     struct ggml_tensor * shared_head_head = nullptr;
     struct ggml_tensor * shared_head_norm = nullptr;
+
+    // qwen4exp: the NextN head's final hyper-connection mixer. For merged
+    // community files these are resolved to shared_head_norm + the trunk mixer.
+    struct ggml_tensor * hc_head_norm      = nullptr;
+    struct ggml_tensor * hc_head_down      = nullptr;
+    struct ggml_tensor * hc_head_up        = nullptr;
 };
 
 // TODO: separate into "llama_layer_enc" and "llama_layer_dec"
@@ -397,6 +404,29 @@ struct llama_layer {
     struct ggml_tensor * hc_ffn_base      = nullptr;
     struct ggml_tensor * hc_ffn_fn        = nullptr;
     struct ggml_tensor * hc_ffn_scale     = nullptr;
+
+    // qwen4exp low-rank hyper-connections
+    struct ggml_tensor * hc_attn_norm     = nullptr;
+    struct ggml_tensor * hc_attn_down     = nullptr;
+    struct ggml_tensor * hc_attn_up       = nullptr;
+    struct ggml_tensor * hc_attn_inject   = nullptr;
+    struct ggml_tensor * hc_ffn_norm      = nullptr;
+    struct ggml_tensor * hc_ffn_down      = nullptr;
+    struct ggml_tensor * hc_ffn_up        = nullptr;
+    struct ggml_tensor * hc_ffn_inject    = nullptr;
+
+    // qwen4exp QSA indexer
+    struct ggml_tensor * indexer_q_proj   = nullptr;
+    struct ggml_tensor * indexer_k_proj   = nullptr;
+    struct ggml_tensor * indexer_q_norm   = nullptr;
+
+    // qwen4exp per-layer n-gram embedding (PLE); present on ple layers only
+    struct ggml_tensor * ple_key          = nullptr;
+    struct ggml_tensor * ple_value        = nullptr;
+    struct ggml_tensor * ple_norm_key     = nullptr;
+    struct ggml_tensor * ple_norm_query   = nullptr;
+    struct ggml_tensor * ple_norm_conv    = nullptr;
+    struct ggml_tensor * ple_conv1d       = nullptr;
     struct ggml_tensor * attn_comp_wkv     = nullptr;
     struct ggml_tensor * attn_comp_wgate   = nullptr;
     struct ggml_tensor * attn_comp_ape     = nullptr;
@@ -508,6 +538,11 @@ struct llama_model {
     struct ggml_tensor * hc_head_fn = nullptr;
     struct ggml_tensor * hc_head_scale = nullptr;
 
+    // qwen4exp: final low-rank hyper-connection mix, plus the n-gram embedding table
+    struct ggml_tensor * hc_head_norm = nullptr;
+    struct ggml_tensor * hc_head_down = nullptr;
+    struct ggml_tensor * hc_head_up   = nullptr;
+
     // openPangu-2.0: global mHC stream-merge module (non-block)
     struct ggml_tensor * mhc_merge_phi   = nullptr;
     struct ggml_tensor * mhc_merge_alpha = nullptr;
@@ -588,7 +623,7 @@ struct llama_model {
     size_t max_nodes(int n_tokens) const {
         auto n_tensors = tensors_by_name.size();
         if (split_mode == LLAMA_SPLIT_MODE_GRAPH && !devices.empty()) n_tensors *= devices.size();
-        if (arch == LLM_ARCH_QWEN3NEXT || arch == LLM_ARCH_QWEN35MOE || arch == LLM_ARCH_QWEN35) {
+        if (arch == LLM_ARCH_QWEN3NEXT || arch == LLM_ARCH_QWEN35MOE || arch == LLM_ARCH_QWEN35 || arch == LLM_ARCH_QWEN4EXP) {
             return std::max<size_t>(n_tokens * 40, 32u * n_tensors);
         }
         //return std::max<size_t>(1024, 8*n_tensors);
@@ -613,7 +648,8 @@ struct llama_model {
     // a compacted sliding-window cache needs the graph to build its KQ mask over the compacted
     // layout, and the compacted mask keys on position alone, so it requires a single sequence
     bool supports_swa_compress() const {
-        return arch == LLM_ARCH_OPENPANGU || arch == LLM_ARCH_DEEPSEEK4 || arch == LLM_ARCH_LAGUNA;
+        return arch == LLM_ARCH_OPENPANGU || arch == LLM_ARCH_DEEPSEEK4
+            || arch == LLM_ARCH_LAGUNA   || arch == LLM_ARCH_GEMMA4;
     }
 
     static inline int hadamard_size(int head_size) {

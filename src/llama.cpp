@@ -660,6 +660,7 @@ static void why_not_reuse_previous(const llama_batch & u_batch, const llama_cont
 
 bool llama_context::can_reuse_graph(const llama_batch & u_batch, uint64_t seq_fingerprint, uint64_t model_state_hash) {
     if (!cparams.graph_reuse) return false;
+    if (qsa_pooled_stale) return false; // the rebuild needs a graph with the full pooling window
     auto the_prev = cparams.mtp_op_type == MTP_OP_NONE ? prev.get() : prev_mtp.get();
     if (!the_prev || !the_prev->graph) return false;
     if (u_batch.embd) return false;
@@ -1155,6 +1156,7 @@ static bool llama_mtp_tail_uses_layer_cache(const llama_model & model) {
     return model.hparams.nextn_predict_layers > 0 &&
         (model.arch == LLM_ARCH_GLM_DSA ||
          model.arch == LLM_ARCH_QWEN35MOE ||
+         model.arch == LLM_ARCH_QWEN4EXP ||
          model.arch == LLM_ARCH_STEP35);
 }
 
@@ -1344,8 +1346,15 @@ static bool llama_kv_cache_init(
     const bool has_glm_dsa_indexer = model.arch == LLM_ARCH_GLM_DSA && hparams.indexer_head_size > 0;
     const bool has_openpangu_dsa_indexer =
         model.arch == LLM_ARCH_OPENPANGU && hparams.indexer_head_size > 0 && hparams.n_swa > 0;
-    if (has_glm_dsa_indexer || has_openpangu_dsa_indexer) {
+    // qwen4exp scores whole blocks of compress_ratio tokens, so its cached indexer keys are raw:
+    // pooling precedes the norm and the rotation that the other two arches fold in before caching.
+    const bool has_qwen4exp_indexer =
+        model.arch == LLM_ARCH_QWEN4EXP && hparams.indexer_head_size > 0;
+    if (has_glm_dsa_indexer || has_openpangu_dsa_indexer || has_qwen4exp_indexer) {
         cache.kr_l.resize(n_layer, nullptr);
+    }
+    if (has_qwen4exp_indexer) {
+        cache.kp_l.resize(n_layer, nullptr);
     }
 
     std::vector<size_t> mem_split(model.splits.size(), 0);
@@ -1382,7 +1391,10 @@ static bool llama_kv_cache_init(
         ggml_tensor * v = nullptr;
         ggml_tensor * s = nullptr;
         if (qnext_recurrent) {
-            s = ggml_new_tensor_2d(ctx, GGML_TYPE_F32, hparams.n_embd_v_s(), qnext_state_slots);
+            // a PLE layer keeps its convolution history in the tail of the same row, so the
+            // delta-net slice it opens with keeps the offsets every other layer uses
+            s = ggml_new_tensor_2d(ctx, GGML_TYPE_F32,
+                    hparams.n_embd_v_s() + hparams.n_embd_ple_conv(i), qnext_state_slots);
             auto s_name = std::string{"cache_s_l"} + std::to_string(i);
             ggml_set_name(s, s_name.c_str());
             cache.s_l[i] = s;
@@ -1515,6 +1527,28 @@ static bool llama_kv_cache_init(
             } else {
                 k = ggml_new_tensor_2d(ctx, this_type_k, n_embd_head_k, n_head_kv*cache.rows(i));
                 v = ggml_new_tensor_1d(ctx, this_type_v, v_ne);
+            }
+
+            // a PLE layer that is not recurrent has no state row to extend, so it gets one
+            // holding nothing but the convolution history
+            if (hparams.n_embd_ple_conv(i) > 0 && cache.s_l[i] == nullptr) {
+                ggml_tensor * s_ple = ggml_new_tensor_2d(ctx, GGML_TYPE_F32,
+                        hparams.n_embd_ple_conv(i), qnext_state_slots);
+                ggml_format_name(s_ple, "cache_s_l%d", i);
+                cache.s_l[i] = s_ple;
+            }
+
+            if (has_qwen4exp_indexer && hparams.is_qsa(i)) {
+                const uint32_t ratio = hparams.dsv4_compress_ratios[i];
+                ggml_tensor * idxk = ggml_new_tensor_2d(ctx, idx_type_k, hparams.indexer_head_size, cache.rows(i));
+                ggml_format_name(idxk, "cache_kr_l%d", i);
+                cache.kr_l[i] = idxk;
+
+                // one pooled key per block of `ratio` positions, so this costs 1/ratio of the raw cache
+                ggml_tensor * idxp = ggml_new_tensor_2d(ctx, idx_type_k, hparams.indexer_head_size,
+                        (cache.rows(i) + ratio - 1)/ratio);
+                ggml_format_name(idxp, "cache_kp_l%d", i);
+                cache.kp_l[i] = idxp;
             }
 
             auto k_name = std::string{"cache_k_l"} + std::to_string(i);
@@ -1996,6 +2030,15 @@ bool llama_kv_cache::checkpoint_save(ggml_backend_sched_t sched) {
     ckpt.used_snapshot  = used;
 
     std::unordered_set<ggml_backend_t> backends_to_sync;
+    // a row with no resolvable backend is copied generically, outside any stream;
+    // drain queued work once so the copy cannot race an in-flight graph
+    bool sched_synced = false;
+    auto sync_sched_once = [&]() {
+        if (!sched_synced) {
+            ggml_backend_sched_synchronize(sched);
+            sched_synced = true;
+        }
+    };
 
     for (uint32_t il = 0; il < n_layer; ++il) {
         if (s_l[il] == nullptr) {
@@ -2007,18 +2050,28 @@ bool llama_kv_cache::checkpoint_save(ggml_backend_sched_t sched) {
             auto & shadow_split = ckpt.split_s_l_shadow[il];
             for (int d = 0; d < split_info->n_device; ++d) {
                 if (split_info->splits[d] && shadow_split[d]) {
-                    //ggml_backend_tensor_copy(split_info->splits[d], shadow_split[d]);
                     auto src_backend = ggml_backend_sched_get_tensor_backend(sched, split_info->splits[d]);
-                    ggml_backend_tensor_copy_async(src_backend, src_backend, split_info->splits[d], shadow_split[d]);
-                    backends_to_sync.insert(src_backend);
+                    if (src_backend == nullptr) {
+                        // a host-resident row (e.g. CUDA_Host) matches no backend's default
+                        // buffer type between graphs; the generic copy handles it
+                        sync_sched_once();
+                        ggml_backend_tensor_copy(split_info->splits[d], shadow_split[d]);
+                    } else {
+                        ggml_backend_tensor_copy_async(src_backend, src_backend, split_info->splits[d], shadow_split[d]);
+                        backends_to_sync.insert(src_backend);
+                    }
                 }
             }
         } else {
             GGML_ASSERT(ckpt.s_l_shadow[il] != nullptr);
             auto src_backend = ggml_backend_sched_get_tensor_backend(sched, s_l[il]);
-            GGML_ASSERT(src_backend != nullptr);
-            ggml_backend_tensor_copy_async(src_backend, src_backend, s_l[il], ckpt.s_l_shadow[il]);
-            backends_to_sync.insert(src_backend);
+            if (src_backend == nullptr) {
+                sync_sched_once();
+                ggml_backend_tensor_copy(s_l[il], ckpt.s_l_shadow[il]);
+            } else {
+                ggml_backend_tensor_copy_async(src_backend, src_backend, s_l[il], ckpt.s_l_shadow[il]);
+                backends_to_sync.insert(src_backend);
+            }
         }
     }
 
@@ -2045,6 +2098,15 @@ bool llama_kv_cache::checkpoint_restore(ggml_backend_sched_t sched) {
     used  = ckpt.used_snapshot;
 
     std::unordered_set<ggml_backend_t> backends_to_sync;
+    // a row with no resolvable backend is copied generically, outside any stream;
+    // drain queued work once so the copy cannot race an in-flight graph
+    bool sched_synced = false;
+    auto sync_sched_once = [&]() {
+        if (!sched_synced) {
+            ggml_backend_sched_synchronize(sched);
+            sched_synced = true;
+        }
+    };
 
     for (uint32_t il = 0; il < n_layer; ++il) {
         if (s_l[il] == nullptr) {
@@ -2057,17 +2119,26 @@ bool llama_kv_cache::checkpoint_restore(ggml_backend_sched_t sched) {
             for (int d = 0; d < split_info->n_device; ++d) {
                 if (split_info->splits[d] && shadow_split[d]) {
                     auto dst_backend = ggml_backend_sched_get_tensor_backend(sched, split_info->splits[d]);
-                    ggml_backend_tensor_copy_async(dst_backend, dst_backend, shadow_split[d], split_info->splits[d]);
-                    backends_to_sync.insert(dst_backend);
+                    if (dst_backend == nullptr) {
+                        sync_sched_once();
+                        ggml_backend_tensor_copy(shadow_split[d], split_info->splits[d]);
+                    } else {
+                        ggml_backend_tensor_copy_async(dst_backend, dst_backend, shadow_split[d], split_info->splits[d]);
+                        backends_to_sync.insert(dst_backend);
+                    }
                 }
             }
         } else {
             GGML_ASSERT(ckpt.s_l_shadow[il] != nullptr);
             GGML_ASSERT(ggml_nbytes(ckpt.s_l_shadow[il]) == ggml_nbytes(s_l[il]));
             auto dst_backend = ggml_backend_sched_get_tensor_backend(sched, s_l[il]);
-            GGML_ASSERT(dst_backend != nullptr);
-            ggml_backend_tensor_copy_async(dst_backend, dst_backend, ckpt.s_l_shadow[il], s_l[il]);
-            backends_to_sync.insert(dst_backend);
+            if (dst_backend == nullptr) {
+                sync_sched_once();
+                ggml_backend_tensor_copy(ckpt.s_l_shadow[il], s_l[il]);
+            } else {
+                ggml_backend_tensor_copy_async(dst_backend, dst_backend, ckpt.s_l_shadow[il], s_l[il]);
+                backends_to_sync.insert(dst_backend);
+            }
         }
     }
 
@@ -4712,10 +4783,36 @@ static bool llm_load_tensors(
         defer_expert_mmap = false;
     }
 
+    bool defer_ple_mmap = ml.should_defer_ple_mmaps();
+    if (defer_ple_mmap && use_mlock) {
+        LLAMA_LOG_WARN("%s: deferred per-layer token embedding disabled because mlock keeps mmap ranges resident\n", __func__);
+        defer_ple_mmap = false;
+    }
+    if (ml.defer_ple && !ml.use_mmap && !ml.ple_tensor_index.empty()) {
+        LLAMA_LOG_WARN("%s: --defer-ple had no effect: creating the tensors disabled mmap\n", __func__);
+    }
+
     ml.done_getting_tensors();
 
     // --dry-run skips MAP_POPULATE/WILLNEED — tensor data is never read.
-    ml.init_mappings(!defer_expert_mmap && !dry_run, use_mlock ? &model.mlock_mmaps : nullptr, ml.use_thp);
+    ml.init_mappings(!defer_expert_mmap && !defer_ple_mmap && !dry_run, use_mlock ? &model.mlock_mmaps : nullptr, ml.use_thp);
+
+    // dropping a range discards an anonymous huge-page mapping, so test the mapping and not the -thp flag
+    if (ml.has_anonymous_mapping()) {
+        if (defer_expert_mmap) {
+            LLAMA_LOG_WARN("%s: deferred expert loading disabled because the model is mapped on huge pages\n", __func__);
+            defer_expert_mmap = false;
+        }
+        if (defer_ple_mmap) {
+            LLAMA_LOG_WARN("%s: deferred per-layer token embedding disabled because the model is mapped on huge pages\n", __func__);
+            defer_ple_mmap = false;
+        }
+    }
+    if (defer_ple_mmap && !dry_run) {
+        LLAMA_LOG_INFO("%s: deferring %.2f GiB of per-layer token embedding to the file\n", __func__,
+                ml.ple_tensor_index.deferred_bytes / 1024.0 / 1024.0 / 1024.0);
+    }
+
     model.mappings.reserve(ml.mappings.size());
 
     // create the backend buffers
@@ -4856,6 +4953,10 @@ static bool llm_load_tensors(
         if (defer_expert_mmap) {
             ml.drop_mmap_expert_pages();
         }
+
+        if (defer_ple_mmap) {
+            ml.apply_ple_mmap_policy();
+        }
     }
 
     if (model.is_mla_model()) {
@@ -4977,6 +5078,8 @@ static int llama_model_load(const std::string & fname, llama_model & model, llam
 
         model.mtp = params.mtp;
 
+        ml.defer_ple = params.defer_ple;
+
         try {
             llm_load_arch(ml, model);
         } catch(const std::exception & e) {
@@ -5001,6 +5104,20 @@ static int llama_model_load(const std::string & fname, llama_model & model, llam
             ml.build_expert_tensor_index(model.hparams);
 #else
             LLAMA_LOG_WARN("%s: deferred expert loading is only supported on Linux; ignoring defer_experts\n", __func__);
+#endif
+        }
+        if (params.defer_ple) {
+#ifdef __linux__
+            if (!params.use_mmap) {
+                LLAMA_LOG_WARN("%s: --defer-ple had no effect: mmap is disabled\n", __func__);
+            } else {
+                ml.build_ple_tensor_index();
+                if (ml.ple_tensor_index.empty()) {
+                    LLAMA_LOG_WARN("%s: --defer-ple had no effect: no per-layer token embedding\n", __func__);
+                }
+            }
+#else
+            LLAMA_LOG_WARN("%s: deferred per-layer token embedding is only supported on Linux; ignoring defer_ple\n", __func__);
 #endif
         }
         try {
@@ -5164,6 +5281,150 @@ static void llama_set_inputs(llama_context & lctx, const llama_batch & batch) {
                 }
             }
         }
+    }
+
+    for (auto & qsa : lctx.inp_qsa) {
+        // blocks are keyed by CELL index, so concurrent sequences never claim the same slot.
+        // Interleaved they are approximate, not broken: a block takes its first member's rope
+        // position, and one spanning a sequence boundary is dropped from the cut below
+        GGML_ASSERT(ggml_backend_buffer_is_host(qsa.bias->buffer));
+
+        const int32_t n_kv     = qsa.cell_blk->ne[0];
+        const int32_t r        = qsa.ratio;
+        const int32_t n_tokens = qsa.bias->ne[1];
+        const int32_t n_win    = qsa.win_blocks->ne[0];
+        const int32_t n_blocks = kv_self.kp_l.empty() ? 0 : (n_kv + r - 1)/r;
+
+        int32_t * dst_cell_blk  = (int32_t *) qsa.cell_blk->data;
+        int32_t * dst_win_blk   = (int32_t *) qsa.win_blocks->data;
+        int32_t * dst_win_cells = (int32_t *) qsa.win_cells->data;
+        int32_t * dst_win_pos   = (int32_t *) qsa.win_pos->data;
+        float   * dst_bias      = (float   *) qsa.bias->data;
+
+        // the fused indexer op takes a per-head weight; this architecture sums the heads plain
+        if (qsa.head_w) {
+            float * dst_w = (float *) qsa.head_w->data;
+            std::fill(dst_w, dst_w + ggml_nelements(qsa.head_w), 1.0f);
+        }
+
+        // -1 where the block cannot be pooled. Block 0 stands in so the gather stays in range;
+        // the bias below is what keeps those out of the ranking
+        std::vector<int32_t> blk_of(n_kv, -1);
+        std::vector<llama_pos> cell_pos(n_kv, -1);
+        std::vector<int32_t> filled(n_blocks, 0);
+        std::vector<llama_seq_id> blk_seq(n_blocks, -1);
+        std::vector<bool> blk_mixed(n_blocks, false);
+        std::vector<int32_t> blk_cells(r*n_blocks, 0);
+        std::vector<llama_pos> blk_pos(n_blocks, -1);
+
+        for (int32_t j = 0; j < n_kv; ++j) {
+            const auto & cell = kv_self.cells[j];
+            if (cell.is_empty()) {
+                continue;
+            }
+
+            const llama_pos p = cell.pos;
+            const int32_t   b = j/r;
+
+            const llama_seq_id sid = *cell.seq_id.begin();
+            if (blk_seq[b] < 0) {
+                blk_seq[b] = sid;
+            } else if (blk_seq[b] != sid) {
+                blk_mixed[b] = true;
+            }
+
+            blk_of[j]   = (int32_t) b;
+            cell_pos[j] = p;
+            blk_cells[b*r + j%r] = j;
+            if (blk_pos[b] < 0 || p < blk_pos[b]) {
+                blk_pos[b] = p;
+            }
+            filled[b]++;
+        }
+
+        // only these blocks can have changed. A short window repeats its last entry, so the
+        // scatter writes the same correct value twice rather than an unrelated block
+        std::vector<int32_t> touched;
+        touched.reserve(n_win);
+        if (lctx.qsa_pooled_stale) {
+            for (int32_t b = 0; b < n_blocks; ++b) {
+                touched.push_back((int32_t) b);
+            }
+        } else
+        for (int32_t i = 0; i < n_tokens && i < batch.n_tokens; ++i) {
+            const int32_t b = (int32_t) ((kv_self.head + i)/r);
+            if (b < n_blocks && std::find(touched.begin(), touched.end(), b) == touched.end()) {
+                touched.push_back(b);
+                if ((int32_t) touched.size() == n_win) {
+                    break;
+                }
+            }
+        }
+        if (touched.empty()) {
+            touched.push_back(0);
+        }
+
+        for (int32_t w = 0; w < n_win; ++w) {
+            const int32_t b = touched[std::min<size_t>(w, touched.size() - 1)];
+            dst_win_blk[w] = b;
+            std::copy_n(blk_cells.begin() + b*r, r, dst_win_cells + w*r);
+            // the block's own first position, which equals b*r only while a single sequence
+            // fills the cache from zero
+            const int32_t bp = blk_pos[b] < 0 ? 0 : (int32_t) blk_pos[b];
+            for (int32_t sec = 0; sec < GGML_MROPE_SECTIONS; ++sec) {
+                dst_win_pos[sec*n_win + w] = bp;
+            }
+        }
+
+        for (int32_t j = 0; j < n_kv; ++j) {
+            const int32_t b = blk_of[j];
+            if (b >= 0 && (filled[b] < r || blk_mixed[b])) {
+                blk_of[j] = -1;
+            }
+            dst_cell_blk[j] = blk_of[j] < 0 ? 0 : blk_of[j];
+        }
+
+        // KQ_mask already carries causality, so this holds only the per-block part: -inf for an
+        // unpoolable block, a boost for the incomplete block the query sits in
+        auto fill_bias = [&](int32_t i0, int32_t i1) {
+            for (int32_t i = i0; i < i1; ++i) {
+                // n_kv times n_tokens reaches 2^31 at the model's full context, so index wide
+                float * cur_bias = dst_bias + (size_t) i*n_kv;
+
+                if (i >= batch.n_tokens) {
+                    std::fill(cur_bias, cur_bias + n_kv, 0.0f);
+                    continue;
+                }
+
+                const llama_pos q          = batch.pos[i];
+                const llama_pos tail_start = (q + 1)/r*r;
+
+                for (int32_t j = 0; j < n_kv; ++j) {
+                    const llama_pos p = cell_pos[j];
+
+                    // finite, so it can never meet a -inf and produce a nan
+                    cur_bias[j] = (p >= tail_start && p <= q) ? 1e9f
+                                : (blk_of[j] < 0 ? -INFINITY : 0.0f);
+                }
+            }
+        };
+        if (n_kv >= 1024 && n_tokens >= 32) {
+            // the same threshold the KQ_mask fill below uses for the same iteration space
+            const int n_thread = std::max(1, int(std::thread::hardware_concurrency()/2));
+            const int32_t npt = (n_tokens + n_thread - 1)/n_thread;
+            std::vector<std::thread> workers;
+            for (int32_t i0 = npt; i0 < n_tokens; i0 += npt) {
+                workers.emplace_back(fill_bias, i0, std::min(n_tokens, i0 + npt));
+            }
+            fill_bias(0, std::min(n_tokens, npt));
+            for (auto & w : workers) w.join();
+        } else {
+            fill_bias(0, n_tokens);
+        }
+
+        // a reused graph was built with the narrow window, so clearing on `touched` alone would
+        // leave the blocks it could not reach at zero
+        lctx.qsa_pooled_stale = (int32_t) touched.size() > n_win;
     }
 
     if (batch.token && lctx.inp_tokens) {
@@ -5874,6 +6135,98 @@ static void llama_set_inputs(llama_context & lctx, const llama_batch & batch) {
         for (int64_t j = 0; j < n_tokens; ++j) {
             // qwen3next and openPangu use a single local recurrent state slot.
             data[j] = 0;
+        }
+    }
+
+    if (lctx.inp_ple_rows) {
+        const auto & hp = lctx.model.hparams;
+
+        const int32_t     n_tokens = batch.n_tokens;
+        const int32_t     n_gram   = hp.ple_ngram_size;
+        const int32_t     n_heads  = hp.ple_n_heads;
+        const int32_t     per_gram = hp.ple_heads_per_ngram;
+        const llama_token eos      = hp.ple_eos_token_id;
+
+        GGML_ASSERT(ggml_backend_buffer_is_host(lctx.inp_ple_rows->buffer));
+        int32_t * data = (int32_t *) lctx.inp_ple_rows->data;
+
+        // an embedding ubatch has no token ids, and this feeds get_rows into a 320 M row table,
+        // so every position still needs a defined row. The reference hashes the image placeholder
+        // here; without that key EOS just makes the span a segment boundary
+        const llama_token img_tok = hp.ple_image_token_id != 0
+            ? (llama_token) hp.ple_image_token_id
+            : eos;
+        auto tok_of = [&](int32_t k) -> llama_token {
+            return batch.token ? batch.token[k] : img_tok;
+        };
+
+        // snapshot before any update: one pass would let a token read an earlier token of this
+        // same ubatch as prior context
+        std::map<llama_seq_id, std::vector<llama_token>> snap;
+        for (int32_t i = 0; i < n_tokens; ++i) {
+            const llama_seq_id seq = batch.seq_id[i][0];
+            if (snap.count(seq)) {
+                continue;
+            }
+            auto & h = lctx.ple_hist[seq];
+            if (h.next_pos != batch.pos[i]) {
+                h.toks.assign(n_gram - 1, eos);
+            }
+            h.toks.resize(n_gram - 1, eos);
+            snap[seq] = h.toks;
+        }
+
+        for (int32_t i = 0; i < n_tokens; ++i) {
+            const llama_pos    pos = batch.pos[i];
+            const llama_seq_id seq = batch.seq_id[i][0];
+
+            const auto & hist = snap[seq];
+
+            // predecessor s (1-based) of this token: from the ubatch when it is there, from the
+            // sequence's own history when it is not, EOS past a segment boundary
+            auto prev = [&](int32_t s) -> llama_token {
+                const int32_t j = i - s;
+                if (j >= 0 && batch.seq_id[j][0] == seq && batch.pos[j] == pos - s) {
+                    return tok_of(j);
+                }
+                // s - i positions before this ubatch started, most recent last
+                const int32_t back = s - i;
+                const int32_t k    = (int32_t) hist.size() - back;
+                if (back > 0 && k >= 0 && pos - s >= 0) {
+                    return hist[k];
+                }
+                return eos;
+            };
+
+            std::vector<llama_token> ctx_toks(n_gram);
+            ctx_toks[0] = tok_of(i);
+            bool cut = false;
+            for (int32_t s = 1; s < n_gram; ++s) {
+                ctx_toks[s] = cut ? eos : prev(s);
+                if (ctx_toks[s] == eos) {
+                    cut = true;
+                }
+            }
+
+            for (int32_t n = 2; n <= n_gram; ++n) {
+                uint64_t mixed = (uint64_t) ctx_toks[0] * hp.ple_layer_multipliers[0];
+                for (int32_t j = 1; j < n; ++j) {
+                    mixed ^= (uint64_t) ctx_toks[j] * hp.ple_layer_multipliers[j];
+                }
+                const int32_t base = (n - 2) * per_gram;
+                for (int32_t g = 0; g < per_gram; ++g) {
+                    const int32_t h_i = base + g;
+                    data[i * n_heads + h_i] =
+                        (int32_t) (mixed % hp.ple_head_vocab_sizes[h_i] + hp.ple_head_offsets[h_i]);
+                }
+            }
+
+            auto & h = lctx.ple_hist[seq];
+            h.toks.push_back(tok_of(i));
+            if ((int32_t) h.toks.size() > n_gram - 1) {
+                h.toks.erase(h.toks.begin(), h.toks.end() - (n_gram - 1));
+            }
+            h.next_pos = pos + 1;
         }
     }
 
@@ -7041,8 +7394,9 @@ static void llama_kv_cache_defrag_internal(struct llama_context & lctx) {
     // TODO: tmp fix https://github.com/ggerganov/llama.cpp/issues/6685#issuecomment-2057579516
     // DSA: build_defrag additionally moves the indexer-key cache (kr_l), +3 tensors/layer/move
     // (src view, dst view, copy), so budget 9*n_layer per move when the indexer cache is present.
-    const bool has_dsa_indexer_defrag =
-        lctx.model.arch == LLM_ARCH_GLM_DSA && !kv_self.kr_l.empty();
+    // build_defrag moves kr_l for whichever layer holds one, so the budget follows the cache
+    // rather than the architecture that allocated it.
+    const bool has_dsa_indexer_defrag = !kv_self.kr_l.empty();
     const uint32_t tensors_per_move = has_dsa_indexer_defrag ? 9 : 6;
     const uint32_t max_moves = (lctx.model.max_nodes(1) - 2*n_layer)/(tensors_per_move*n_layer);
 
@@ -7152,6 +7506,10 @@ static void llama_kv_cache_defrag_internal(struct llama_context & lctx) {
     if (n_moves == 0) {
         return;
     }
+
+    // blocks are keyed by cell index, so moving cells changes every touched block's membership;
+    // the pooled block keys must be rebuilt from the moved indexer keys
+    lctx.qsa_pooled_stale = !kv_self.kp_l.empty();
 
     //LLAMA_LOG_INFO("(tmp log) KV defrag cell moves: %u\n", n_moves);
 
@@ -7614,6 +7972,7 @@ struct llama_model_params llama_model_default_params() {
         /*.dry_run                     =*/ false,
         /*.flash_attn                  =*/ true,
         /*.defer_experts               =*/ false,
+        /*.defer_ple                   =*/ false,
         /*.swa_compress                =*/ false,
     };
 
@@ -8311,6 +8670,7 @@ struct llama_context * llama_init_from_model(
         model->arch != LLM_ARCH_STEP35 &&
         model->arch != LLM_ARCH_GEMMA4_ASSISTANT &&
         model->arch != LLM_ARCH_OPENPANGU &&
+        model->arch != LLM_ARCH_QWEN4EXP &&
         cparams.mtp != 0) {
         cparams.mtp = 0;
     }
@@ -8570,6 +8930,11 @@ struct llama_context * llama_init_from_model(
                 }
             }
             for (auto & k : ctx->kv_self.kr_l) {
+                if (k) {
+                    memory_size_k_indexer += ggml_nbytes(k);
+                }
+            }
+            for (auto & k : ctx->kv_self.kp_l) {
                 if (k) {
                     memory_size_k_indexer += ggml_nbytes(k);
                 }
@@ -8952,6 +9317,7 @@ enum llama_rope_type llama_rope_type(const struct llama_model * model) {
         case LLM_ARCH_QWEN3VLMOE:
         case LLM_ARCH_QWEN35MOE:
         case LLM_ARCH_QWEN35:
+        case LLM_ARCH_QWEN4EXP:
             return LLAMA_ROPE_TYPE_IMROPE;
 
         // all model arches should be listed explicitly here
@@ -9319,6 +9685,14 @@ static bool spec_ckpt_try_per_step(llama_kv_cache & kv, const llama_model & mode
     // here) - does not apply. Decline it so the checkpoint resolves to the whole-slot
     // shadow (gpu-fallback), which is arch-agnostic.
     if (model.arch == LLM_ARCH_OPENPANGU) {
+        kv.save_per_step_ssm = false;
+        return false;
+    }
+
+    // qwen4exp's recurrent row carries a PLE conv-history tail the per-step
+    // checkpoint doesn't size, so it would leave that tail advanced by rejected
+    // drafts. Decline; the whole-slot (gpu-fallback) shadow covers the full row.
+    if (model.arch == LLM_ARCH_QWEN4EXP) {
         kv.save_per_step_ssm = false;
         return false;
     }
@@ -10875,6 +11249,11 @@ struct llama_data_read {
                 }
             }
         }
+
+        // the pooled block keys are derived from the indexer keys restored just above, and the
+        // builder rebuilds only the blocks an ubatch writes into, so the next graph must pool
+        // every block once
+        ctx->qsa_pooled_stale = !kv_self.kp_l.empty();
 
         if (ctx->model.arch == LLM_ARCH_OPENPANGU &&
             !read_openpangu_state(ctx, n_layer, seq_id, false)) {

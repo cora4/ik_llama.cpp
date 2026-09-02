@@ -81,6 +81,8 @@ struct create_tensors_helper : public create_tensors_helper_interface {
 
     bool create_qwen3next_tensors(const LLM_TN & tn);
 
+    bool create_qwen4exp_tensors(const LLM_TN & tn);
+
     bool create_qwen35moe_tensors(const LLM_TN & tn);
 
     bool create_qwen35_tensors(const LLM_TN & tn);
@@ -1666,6 +1668,262 @@ bool create_tensors_helper::create_qwen3next_tensors(const LLM_TN & tn) {
             layer.ffn_gate_shexp = create_tensor(ctx_split, tn(LLM_TENSOR_FFN_GATE_SHEXP, "weight", i), {n_embd, n_ff_shexp}, llama_model_loader::TENSOR_NOT_REQUIRED);
             layer.ffn_up_shexp   = create_tensor(ctx_split, tn(LLM_TENSOR_FFN_UP_SHEXP,   "weight", i), {n_embd, n_ff_shexp}, llama_model_loader::TENSOR_NOT_REQUIRED);
             layer.ffn_down_shexp = create_tensor(ctx_split, tn(LLM_TENSOR_FFN_DOWN_SHEXP, "weight", i), {n_ff_shexp, n_embd}, llama_model_loader::TENSOR_NOT_REQUIRED);
+        }
+    }
+
+    return use_mmap_buffer;
+}
+
+bool create_tensors_helper::create_qwen4exp_tensors(const LLM_TN & tn) {
+    LOADING_PRELUDE
+
+    const int32_t hc      = hparams.dsv4_hc_mult;
+    const int32_t hc_dim  = hc * n_embd;
+    const int32_t hc_rank = hparams.hc_low_rank;
+
+    // a companion target passes the head via -md and legitimately declares zero NextN blocks
+    if (model.mtp && hparams.nextn_predict_layers > 1) {
+        throw std::runtime_error(format(
+                "qwen4exp: MTP supports at most one appended NextN block; nextn_predict_layers is %u",
+                hparams.nextn_predict_layers));
+    }
+
+    model.tok_embd = create_tensor(ctx_input, tn(LLM_TENSOR_TOKEN_EMBD, "weight"), {n_embd, n_vocab});
+
+    // a predictor-only GGUF reports the full block count but ships only the NextN block
+    const bool mtp_only = hparams.nextn_predict_layers > 0 &&
+                          ml.get_tensor_meta(tn(LLM_TENSOR_HC_ATTN_NORM, "weight", 0).c_str()) == nullptr;
+    const int trunk_flags = mtp_only
+        ? llama_model_loader::TENSOR_SKIP | llama_model_loader::TENSOR_NOT_REQUIRED : 0;
+
+    // The wide residual is normalised and collapsed by a hyper-connection mix rather
+    // than by an output_norm, so this architecture carries none.
+    const int out_mixer_flags = mtp_only ? llama_model_loader::TENSOR_NOT_REQUIRED : 0;
+    model.hc_head_norm = create_tensor(ctx_output, tn(LLM_TENSOR_HC_HEAD_NORM, "weight"), {hc_dim}, out_mixer_flags);
+    model.hc_head_down = create_tensor(ctx_output, tn(LLM_TENSOR_HC_HEAD_DOWN, "weight"), {hc_dim, hc_rank}, out_mixer_flags);
+    model.hc_head_up   = create_tensor(ctx_output, tn(LLM_TENSOR_HC_HEAD_UP,   "weight"), {hc_rank, hc_dim}, out_mixer_flags);
+    model.output       = create_tensor(ctx_output, tn(LLM_TENSOR_OUTPUT,       "weight"), {n_embd, n_vocab}, llama_model_loader::TENSOR_NOT_REQUIRED);
+    if (model.output == NULL) {
+        model.output = create_tensor(ctx_output, tn(LLM_TENSOR_TOKEN_EMBD, "weight"), {n_embd, n_vocab}, llama_model_loader::TENSOR_DUPLICATED);
+    }
+
+    bool ple_table_needed = hparams.ple_n_heads > 0;
+    if (ple_table_needed && mtp_only) {
+        // only the predictor tail loads from this file; the table is needed only if a tail block uses PLE
+        ple_table_needed = false;
+        for (uint32_t il = hparams.n_layer - hparams.nextn_predict_layers; il < hparams.n_layer; ++il) {
+            ple_table_needed = ple_table_needed || hparams.is_ple(il);
+        }
+    }
+    if (ple_table_needed) {
+        // The row count comes from the table itself. The converter shards the n-gram
+        // table, so the sum of ple_head_vocab_sizes is not the stored row count.
+        const std::string ple_name = tn(LLM_TENSOR_PER_LAYER_TOKEN_EMBD, "weight");
+        const auto * ple_w = ml.get_weight(ple_name.c_str());
+        if (ple_w == nullptr) {
+            throw std::runtime_error("qwen4exp: the PLE n-gram table is missing");
+        }
+        const int64_t ple_rows = ple_w->tensor->ne[1];
+        for (uint32_t h = 0; h < hparams.ple_n_heads; ++h) {
+            // every row this head can reach must exist in the table and fit the I32 row index
+            const uint64_t last = (uint64_t) hparams.ple_head_offsets[h] + hparams.ple_head_vocab_sizes[h];
+            if (last > (uint64_t) ple_rows || last > INT32_MAX) {
+                throw std::runtime_error("qwen4exp: a PLE head reaches past the n-gram table");
+            }
+        }
+        model.tok_embd_per_layer = create_tensor(ctx_input, tn(LLM_TENSOR_PER_LAYER_TOKEN_EMBD, "weight"),
+                {hparams.ple_head_dim, ple_rows});
+    }
+
+    const bool has_moe_hparams = n_expert > 0 && n_expert_used > 0;
+    const int32_t n_ff_exp   = hparams.n_ff_exp ? hparams.n_ff_exp : (has_moe_hparams ? n_ff / n_expert_used : n_ff);
+    const int32_t n_ff_shexp = hparams.n_ff_shexp ? hparams.n_ff_shexp : n_ff_exp;
+
+    const int32_t head_k_dim  = hparams.ssm_d_state;
+    const int32_t num_k_heads = hparams.ssm_n_group;
+    const int32_t num_v_heads = hparams.ssm_dt_rank;
+    const int32_t head_v_dim  = hparams.ssm_d_inner / num_v_heads;
+    const int32_t key_dim     = head_k_dim * num_k_heads;
+    const int32_t value_dim   = head_v_dim * num_v_heads;
+    const int32_t conv_dim    = key_dim * 2 + value_dim;
+
+    const int32_t idx_head   = hparams.indexer_head_size;
+    const int32_t idx_n_head = hparams.indexer_n_head;
+
+    if (n_expert_used == 0) {
+        throw std::runtime_error("n_expert_used must be > 0 when QWEN4EXP MoE tensors are present");
+    }
+
+    for (int i = 0; i < n_layer; ++i) {
+        ggml_context * ctx_layer = ctx_for_layer(i);
+        ggml_context * ctx_split = ctx_for_layer_split(i);
+
+        auto & layer = model.layers[i];
+
+        // the nextn (MTP) tail loads only when speculative MTP is requested
+        const bool is_nextn = hparams.nextn_predict_layers > 0 &&
+                (uint32_t) i >= hparams.n_layer - hparams.nextn_predict_layers;
+        int lf = is_nextn && !model.mtp ? llama_model_loader::TENSOR_SKIP : 0;
+        if (mtp_only && !is_nextn) {
+            lf |= trunk_flags;
+        }
+
+        layer.hc_attn_norm   = create_tensor(ctx_split, tn(LLM_TENSOR_HC_ATTN_NORM,   "weight", i), {hc_dim}, lf);
+        layer.hc_attn_down   = create_tensor(ctx_split, tn(LLM_TENSOR_HC_ATTN_DOWN,   "weight", i), {hc_dim, hc_rank}, lf);
+        layer.hc_attn_up     = create_tensor(ctx_split, tn(LLM_TENSOR_HC_ATTN_UP,     "weight", i), {hc_rank, hc_dim}, lf);
+        layer.hc_attn_inject = create_tensor(ctx_split, tn(LLM_TENSOR_HC_ATTN_INJECT, "weight", i), {hc_dim, hc}, lf);
+        layer.hc_ffn_norm    = create_tensor(ctx_split, tn(LLM_TENSOR_HC_FFN_NORM,    "weight", i), {hc_dim}, lf);
+        layer.hc_ffn_down    = create_tensor(ctx_split, tn(LLM_TENSOR_HC_FFN_DOWN,    "weight", i), {hc_dim, hc_rank}, lf);
+        layer.hc_ffn_up      = create_tensor(ctx_split, tn(LLM_TENSOR_HC_FFN_UP,      "weight", i), {hc_rank, hc_dim}, lf);
+        layer.hc_ffn_inject  = create_tensor(ctx_split, tn(LLM_TENSOR_HC_FFN_INJECT,  "weight", i), {hc_dim, hc}, lf);
+
+        if (hparams.is_ple(i)) {
+            layer.ple_key        = create_tensor(ctx_split, tn(LLM_TENSOR_PLE_KEY,        "weight", i), {n_embd, hc_dim}, lf);
+            layer.ple_value      = create_tensor(ctx_split, tn(LLM_TENSOR_PLE_VALUE,      "weight", i), {n_embd, n_embd}, lf);
+            layer.ple_norm_key   = create_tensor(ctx_split, tn(LLM_TENSOR_PLE_NORM_KEY,   "weight", i), {hc_dim}, lf);
+            layer.ple_norm_query = create_tensor(ctx_split, tn(LLM_TENSOR_PLE_NORM_QUERY, "weight", i), {hc_dim}, lf);
+            layer.ple_norm_conv  = create_tensor(ctx_split, tn(LLM_TENSOR_PLE_NORM_CONV,  "weight", i), {hc_dim}, lf);
+            layer.ple_conv1d     = create_tensor(ctx_split, tn(LLM_TENSOR_PLE_CONV1D,     "weight", i), {hparams.ple_conv_kernel, hc_dim}, lf);
+        }
+
+        if (!hparams.is_recurrent(i)) {
+            // wq carries the query and an equal-width gate
+            layer.wq = create_tensor(ctx_split, tn(LLM_TENSOR_ATTN_Q,   "weight", i), {n_embd, n_embd_head_k * n_head * 2}, lf);
+            layer.wk = create_tensor(ctx_split, tn(LLM_TENSOR_ATTN_K,   "weight", i), {n_embd, n_embd_k_gqa}, lf);
+            layer.wv = create_tensor(ctx_split, tn(LLM_TENSOR_ATTN_V,   "weight", i), {n_embd, n_embd_v_gqa}, lf);
+            layer.wo = create_tensor(ctx_split, tn(LLM_TENSOR_ATTN_OUT, "weight", i), {n_embd_head_k * n_head, n_embd}, lf);
+
+            layer.attn_q_norm = create_tensor(ctx_split, tn(LLM_TENSOR_ATTN_Q_NORM, "weight", i), {n_embd_head_k}, lf);
+            layer.attn_k_norm = create_tensor(ctx_split, tn(LLM_TENSOR_ATTN_K_NORM, "weight", i), {n_embd_head_k}, lf);
+
+            // one indexer key is shared across the indexer heads
+            layer.indexer_q_proj = create_tensor(ctx_split, tn(LLM_TENSOR_INDEXER_Q_PROJ, "weight", i), {n_embd, idx_head * idx_n_head}, lf);
+            layer.indexer_k_proj = create_tensor(ctx_split, tn(LLM_TENSOR_INDEXER_K_PROJ, "weight", i), {n_embd, idx_head}, lf);
+            layer.indexer_q_norm = create_tensor(ctx_split, tn(LLM_TENSOR_INDEXER_Q_NORM, "weight", i), {idx_head}, lf);
+            layer.indexer_k_norm = create_tensor(ctx_split, tn(LLM_TENSOR_INDEXER_K_NORM, "weight", i), {idx_head}, lf);
+        } else {
+            layer.wqkv       = create_tensor(ctx_layer, tn(LLM_TENSOR_ATTN_QKV,   "weight", i), {n_embd, key_dim * 2 + value_dim}, lf);
+            layer.wqkv_gate  = create_tensor(ctx_layer, tn(LLM_TENSOR_ATTN_GATE,  "weight", i), {n_embd, value_dim}, lf);
+            layer.ssm_conv1d = create_tensor(ctx_layer, tn(LLM_TENSOR_SSM_CONV1D, "weight", i), {hparams.ssm_d_conv, conv_dim}, lf);
+            layer.ssm_dt     = create_tensor(ctx_layer, tn(LLM_TENSOR_SSM_DT,     "bias",   i), {hparams.ssm_dt_rank}, lf);
+            layer.ssm_a      = create_tensor(ctx_layer, tn(LLM_TENSOR_SSM_A_NOSCAN,         i), {hparams.ssm_dt_rank}, lf);
+            layer.ssm_beta   = create_tensor(ctx_layer, tn(LLM_TENSOR_SSM_BETA,   "weight", i), {n_embd, num_v_heads}, lf);
+            layer.ssm_alpha  = create_tensor(ctx_layer, tn(LLM_TENSOR_SSM_ALPHA,  "weight", i), {n_embd, num_v_heads}, lf);
+            layer.ssm_norm   = create_tensor(ctx_layer, tn(LLM_TENSOR_SSM_NORM,   "weight", i), {head_v_dim}, lf);
+            layer.ssm_out    = create_tensor(ctx_layer, tn(LLM_TENSOR_SSM_OUT,    "weight", i), {value_dim, n_embd}, lf);
+        }
+
+        auto ffn_ctx = ctx_split;
+
+        layer.ffn_gate_inp = create_tensor(ffn_ctx, tn(LLM_TENSOR_FFN_GATE_INP, "weight", i), {n_embd, n_expert}, lf);
+        use_mmap_buffer &= !create_std_ffn_exps(n_embd, tn, i, lf, n_ff_exp);
+
+        layer.ffn_gate_inp_shexp = create_tensor(ctx_split, tn(LLM_TENSOR_FFN_GATE_INP_SHEXP, "weight", i), {n_embd}, lf);
+        layer.ffn_gate_shexp     = create_tensor(ctx_split, tn(LLM_TENSOR_FFN_GATE_SHEXP,     "weight", i), {n_embd, n_ff_shexp}, lf);
+        layer.ffn_up_shexp       = create_tensor(ctx_split, tn(LLM_TENSOR_FFN_UP_SHEXP,       "weight", i), {n_embd, n_ff_shexp}, lf);
+        layer.ffn_down_shexp     = create_tensor(ctx_split, tn(LLM_TENSOR_FFN_DOWN_SHEXP,     "weight", i), {n_ff_shexp, n_embd}, lf);
+    }
+
+    if (hparams.nextn_predict_layers > 0) {
+        const int bid = n_layer - 1;
+        auto & nextn = model.layers[bid].nextn;
+        auto * head_ctx = ctx_for_layer_split(bid);
+
+        // Head-level tensors are optional at file-load time. A normal load skips any
+        // that are present, while an MTP load resolves and validates one complete layout below.
+        int flags = llama_model_loader::TENSOR_NOT_REQUIRED;
+        if (!model.mtp) {
+            flags |= llama_model_loader::TENSOR_SKIP;
+        }
+
+        const std::string eh_proj_name = tn(LLM_TENSOR_NEXTN_EH_PROJ, "weight", bid);
+        const std::string enorm_name   = tn(LLM_TENSOR_NEXTN_ENORM,   "weight", bid);
+        const std::string hnorm_name   = tn(LLM_TENSOR_NEXTN_HNORM,   "weight", bid);
+        const std::string shared_norm_name = tn(LLM_TENSOR_NEXTN_SHARED_HEAD_NORM, "weight", bid);
+        const std::string hc_norm_name = tn(LLM_TENSOR_NEXTN_HC_HEAD_NORM, "weight", bid);
+        const std::string hc_down_name = tn(LLM_TENSOR_NEXTN_HC_HEAD_DOWN, "weight", bid);
+        const std::string hc_up_name   = tn(LLM_TENSOR_NEXTN_HC_HEAD_UP,   "weight", bid);
+
+        nextn.eh_proj = create_tensor(head_ctx, eh_proj_name, {2 * n_embd, n_embd}, flags);
+        nextn.enorm   = create_tensor(head_ctx, enorm_name,   {n_embd}, flags);
+        nextn.hnorm   = create_tensor(head_ctx, hnorm_name,   {hc_dim}, flags);
+
+        // Flavor A: the upstream converter's head-local mixer.
+        nextn.hc_head_norm = create_tensor(head_ctx, hc_norm_name, {hc_dim}, flags);
+        nextn.hc_head_down = create_tensor(head_ctx, hc_down_name, {hc_dim, hc_rank}, flags);
+        nextn.hc_head_up   = create_tensor(head_ctx, hc_up_name,   {hc_rank, hc_dim}, flags);
+
+        // Flavor B: community merge-script files retain only the head norm and
+        // use the trunk's already-loaded output_hc_down/output_hc_up pair.
+        nextn.shared_head_norm = create_tensor(head_ctx, shared_norm_name, {hc_dim}, flags);
+
+        // Legacy files carry the head under fork-local mtp.* names: register them
+        // known-and-skipped so a non-MTP load balances tensor accounting.
+        {
+            const int legacy = llama_model_loader::TENSOR_NOT_REQUIRED | llama_model_loader::TENSOR_SKIP;
+            create_tensor(head_ctx, "mtp.fc_embd.weight",         {n_embd, n_embd}, legacy);
+            create_tensor(head_ctx, "mtp.fc_hidden.weight",       {n_embd, n_embd}, legacy);
+            create_tensor(head_ctx, "mtp.pre_norm_embd.weight",   {n_embd}, legacy);
+            create_tensor(head_ctx, "mtp.pre_norm_hidden.weight", {hc_dim}, legacy);
+            create_tensor(head_ctx, "mtp.mixer_norm.weight",      {hc_dim}, legacy);
+            create_tensor(head_ctx, "mtp.mixer_down.weight",      {hc_dim, hc_rank}, legacy);
+            create_tensor(head_ctx, "mtp.mixer_up.weight",        {hc_rank, hc_dim}, legacy);
+        }
+
+        if (model.mtp) {
+            std::string missing;
+            auto require = [&](const ggml_tensor * tensor, const std::string & name) {
+                if (tensor == nullptr) {
+                    if (!missing.empty()) {
+                        missing += ", ";
+                    }
+                    missing += name;
+                }
+            };
+
+            require(nextn.eh_proj, eh_proj_name);
+            require(nextn.enorm,   enorm_name);
+            require(nextn.hnorm,   hnorm_name);
+
+            // Any dedicated-mixer tensor selects flavor A. Do not hide a malformed
+            // flavor A by mixing it with flavor B.
+            const bool has_dedicated_mixer = nextn.hc_head_norm != nullptr ||
+                    nextn.hc_head_down != nullptr || nextn.hc_head_up != nullptr;
+            if (has_dedicated_mixer) {
+                require(nextn.hc_head_norm, hc_norm_name);
+                require(nextn.hc_head_down, hc_down_name);
+                require(nextn.hc_head_up,   hc_up_name);
+            } else {
+                // Flavor B': a predictor-only file may omit shared_head_norm and
+                // carry the head norm only in output_hc_norm (Dzannotti layout).
+                // Safe only when mtp_only, where output_hc_* is the head's own mixer.
+                if (nextn.shared_head_norm == nullptr && mtp_only) {
+                    require(model.hc_head_norm, "output_hc_norm.weight");
+                } else {
+                    require(nextn.shared_head_norm, shared_norm_name);
+                }
+                require(model.hc_head_down, "output_hc_down.weight");
+                require(model.hc_head_up,   "output_hc_up.weight");
+            }
+
+            if (!missing.empty()) {
+                throw std::runtime_error(format(
+                        "qwen4exp: MTP requested but the NextN head is incomplete; missing tensor(s): %s. "
+                        "Accepted layouts for block %d are flavor A: %s, %s, %s, %s, %s, %s; "
+                        "or flavor B: %s, %s, %s, %s with trunk output_hc_down.weight and output_hc_up.weight",
+                        missing.c_str(), bid,
+                        eh_proj_name.c_str(), enorm_name.c_str(), hnorm_name.c_str(),
+                        hc_norm_name.c_str(), hc_down_name.c_str(), hc_up_name.c_str(),
+                        eh_proj_name.c_str(), enorm_name.c_str(), hnorm_name.c_str(), shared_norm_name.c_str()));
+            }
+
+            if (!has_dedicated_mixer) {
+                nextn.hc_head_norm = nextn.shared_head_norm != nullptr
+                        ? nextn.shared_head_norm : model.hc_head_norm;
+                nextn.hc_head_down = model.hc_head_down;
+                nextn.hc_head_up   = model.hc_head_up;
+                LLAMA_LOG_WARN("qwen4exp: NextN head has no dedicated hc mixer; using the trunk output_hc mixer\n");
+            }
         }
     }
 
@@ -5271,6 +5529,8 @@ bool create_tensors_helper::create_tensors() {
             use_mmap_buffer = create_mellum_tensors(tn); break;
         case LLM_ARCH_QWEN3NEXT:
             use_mmap_buffer = create_qwen3next_tensors(tn); break;
+        case LLM_ARCH_QWEN4EXP:
+            use_mmap_buffer = create_qwen4exp_tensors(tn); break;
         case LLM_ARCH_QWEN35MOE:
             use_mmap_buffer = create_qwen35moe_tensors(tn); break;
         case LLM_ARCH_QWEN35:
