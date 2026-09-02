@@ -1737,11 +1737,90 @@ void llm_load_hparams(
                     default: model.type = e_model::MODEL_UNKNOWN;
                 }
             } break;
+        case LLM_ARCH_DFLASH2:
+            {
+                ml.get_key(LLM_KV_ATTENTION_LAYERNORM_RMS_EPS, hparams.f_norm_rms_eps);
+                ml.get_key(LLM_KV_LOGIT_SCALE,                 hparams.f_logit_scale, false);
+                hparams.f_final_logit_softcapping = 0.0f;
+                ml.get_key(LLM_KV_FINAL_LOGIT_SOFTCAPPING,     hparams.f_final_logit_softcapping, false);
+                ml.get_key(LLM_KV_EMBEDDING_SCALE,             hparams.f_embedding_scale, false);
+                ml.get_key("dflash.block_size",       hparams.dflash_block_size);
+                ml.get_key("dflash.conv_kernel_size", hparams.dflash_conv_kernel_size);
+                ml.get_key("dflash.conv_group_size",  hparams.dflash_conv_group_size);
+                ml.get_key("dflash.selector_rank",    hparams.dflash_selector_rank);
+                ml.get_key("dflash.selector_top_k",   hparams.dflash_selector_top_k);
+                ml.get_key(LLM_KV_TOKENIZER_MASK_ID,       hparams.dflash_mask_token_id);
+                ml.get_key(LLM_KV_ATTENTION_CAUSAL,        hparams.causal_attn, false);
+                load_dflash_target_layer_ids(
+                        ml,
+                        LLM_KV(model.arch)(LLM_KV_DFLASH_TARGET_LAYERS),
+                        hparams,
+                        true);
+                for (uint32_t i = 0; i < hparams.dflash_n_target_layers; ++i) {
+                    if (hparams.dflash_target_layer_ids[i] == 0) {
+                        throw std::runtime_error("dflash2: target_layers must use one-based IDs");
+                    }
+                    --hparams.dflash_target_layer_ids[i];
+                }
+                hparams.dflash_n_target_features = hparams.n_embd * hparams.dflash_n_target_layers;
+                if (hparams.dflash_selector_top_k == 0 ||
+                        hparams.n_embd < hparams.dflash_selector_top_k * (hparams.dflash_selector_top_k + 1)) {
+                    throw std::runtime_error("dflash2: hidden size is too small for selector top-k lattice");
+                }
+                ml.get_key(LLM_KV_ATTENTION_SLIDING_WINDOW, hparams.n_swa, false);
+                ml.get_key_or_arr(LLM_KV_ATTENTION_SLIDING_WINDOW_PATTERN, hparams.swa_layers, hparams.n_layer, false);
+                hparams.n_layer_kv_from_start = hparams.n_layer;
+                hparams.dflash_dsv4 = false;
+                model.type = e_model::MODEL_UNKNOWN;
+            } break;
         case LLM_ARCH_DFLASH:
         case LLM_ARCH_DEEPSEEK4:
         case LLM_ARCH_GLM_DSA:
             {
-                const bool is_dsv4 = model.arch == LLM_ARCH_DFLASH || model.arch == LLM_ARCH_DEEPSEEK4;
+                if (model.arch == LLM_ARCH_DFLASH) {
+                    const bool has_dense_signature =
+                            ml.get_tensor_meta("blk.0.attn_q.weight") != nullptr;
+                    const bool has_dsv4_signature =
+                            ml.get_tensor_meta("blk.0.attn_q_a.weight") != nullptr ||
+                            ml.get_tensor_meta("blk.0.hc_attn_base.weight") != nullptr;
+                    if (has_dense_signature && has_dsv4_signature) {
+                        throw std::runtime_error("dflash: ambiguous dense and DSV4 tensor signatures");
+                    }
+                    if (!has_dense_signature && !has_dsv4_signature) {
+                        throw std::runtime_error("dflash: unrecognized or incomplete tensor signature");
+                    }
+                    hparams.dflash_dsv4 = has_dsv4_signature;
+                }
+                const bool dflash_dense = model.arch == LLM_ARCH_DFLASH && !hparams.dflash_dsv4;
+                if (dflash_dense) {
+                    ml.get_key(LLM_KV_ATTENTION_LAYERNORM_RMS_EPS, hparams.f_norm_rms_eps);
+                    ml.get_key("dflash.block_size", hparams.dflash_block_size);
+                    ml.get_key(LLM_KV_TOKENIZER_MASK_ID, hparams.dflash_mask_token_id);
+                    ml.get_key(LLM_KV_ATTENTION_SLIDING_WINDOW, hparams.n_swa, false);
+                    ml.get_key_or_arr(LLM_KV_ATTENTION_SLIDING_WINDOW_PATTERN, hparams.swa_layers, hparams.n_layer, false);
+                    load_dflash_target_layer_ids(ml, "dflash.target_layers", hparams, true);
+
+                    const ggml_tensor * fc = ml.get_tensor_meta("fc.weight");
+                    if (fc == nullptr || fc->ne[0] <= 0 || fc->ne[1] != hparams.n_embd) {
+                        throw std::runtime_error("dflash: fc.weight must have shape [n_target_features, embedding_length]");
+                    }
+                    hparams.dflash_n_target_features = (uint32_t) fc->ne[0];
+                    hparams.dflash_backbone_rotary_base = hparams.rope_freq_base_train;
+                    hparams.dflash_laguna = false;
+
+                    for (uint32_t i = 0; i < hparams.dflash_n_target_layers; ++i) {
+                        if (hparams.dflash_target_layer_ids[i] == 0) {
+                            throw std::runtime_error("dflash: target_layers must use one-based IDs");
+                        }
+                        --hparams.dflash_target_layer_ids[i];
+                    }
+                    validate_dflash_hparams(hparams, model.arch);
+
+                    hparams.n_layer_kv_from_start = hparams.n_layer;
+                    model.type = e_model::MODEL_UNKNOWN;
+                    break;
+                }
+                const bool is_dsv4 = model.arch == LLM_ARCH_DEEPSEEK4 || hparams.dflash_dsv4;
                 ml.get_key(LLM_KV_NEXTN_PREDICT_LAYERS, hparams.nextn_predict_layers, false);
                 if (model.arch == LLM_ARCH_DEEPSEEK4 && hparams.n_layer == 43 && hparams.nextn_predict_layers > 0) {
                     LLAMA_LOG_WARN("===============================================================================================\n");

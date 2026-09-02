@@ -307,6 +307,7 @@ const ggml_cuda_device_info & ggml_cuda_info() {
 
 /* ---------- hot-swap: invalidate all cached CUDA graphs ---------- */
 extern "C" void ggml_backend_cuda_invalidate_graphs(const void * model) {
+#ifdef USE_CUDA_GRAPH
     auto & info = const_cast<ggml_cuda_device_info &>(ggml_cuda_info());
     if (auto it = info.all_ctx.find(model); it != info.all_ctx.end()) {
         for (auto ctx : it->second) {
@@ -317,6 +318,9 @@ extern "C" void ggml_backend_cuda_invalidate_graphs(const void * model) {
     } else {
         fprintf(stderr, "================================= %s: did not find entry for model at %p\n", __func__, model);
     }
+#else
+    GGML_UNUSED(model);
+#endif // USE_CUDA_GRAPH
     //for (int i = 0; i < info.device_count; ++i) {
     //    if (info.all_ctx[i]) {
     //        info.all_ctx[i]->cuda_graphs.clear();
@@ -2573,7 +2577,8 @@ static int ggml_cuda_mul_mat_q(ggml_backend_cuda_context & ctx, const ggml_tenso
                                || dst->op == GGML_OP_PERMUTE || dst->op == GGML_OP_NONE) {
             ++node_n; continue;
         }
-        if (dst->op != GGML_OP_MUL_MAT || dst->src[1] != src1 || !ggml_is_quantized(dst->src[0]->type)) break;
+        if (dst->op != GGML_OP_MUL_MAT || dst->src[1] != src1 || !ggml_is_quantized(dst->src[0]->type) ||
+                !ggml_cuda_should_use_mmq(dst->src[0]->type, ggml_cuda_info().devices[ctx.device].cc, src1->ne[1])) break;
         if (!is_gemv && mmq_get_q8_1_ds_layout(src0->type) != mmq_get_q8_1_ds_layout(dst->src[0]->type)) break;
         if (is_gemv) {
             if (fusion && node_n + 2 < cgraph->n_nodes &&
@@ -5122,11 +5127,7 @@ GGML_CALL static bool ggml_backend_cuda_supports_op(ggml_backend_t backend, cons
         case GGML_OP_LATENT_ATTN:
             return ggml_cuda_latent_attn_is_supported(op);
         case GGML_OP_FLASH_ATTN_EXT:
-#if defined(GGML_USE_HIPBLAS) && defined(__HIP_PLATFORM_AMD__)
-            return (op->src[0]->ne[0] == 64 && op->src[1]->type == GGML_TYPE_F16) || op->src[0]->ne[0] == 128;
-#else
             return ggml_cuda_fattn_is_supported(*cuda_ctx, op);
-#endif // defined(GGML_USE_HIPBLAS) && defined(__HIP_PLATFORM_AMD__)
         default:
             return false;
     }
