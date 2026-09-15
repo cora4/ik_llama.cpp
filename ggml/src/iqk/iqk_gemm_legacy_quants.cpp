@@ -846,7 +846,7 @@ static void mul_mat_iq4_nl_r4_q8_2(int n, const void * vx, size_t bx, const Data
     };
     auto dot = [&qx](const int8_t *qy) {
         constexpr __mmask16 hi128 = 0xf0f0;
-        static inline int32_t load_i32 = (const int8_t *p) {
+        auto load_i32 = [](const int8_t *p) -> int32_t {
             return _mm_cvtsi128_si32(_mm_loadu_si32(p));
         };
         auto make_y = [&](int off0, int off1) {
