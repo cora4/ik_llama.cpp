@@ -148,27 +148,27 @@ jobs:
     - name: Benchmark Models (latest) IQ4_NL
       run: |
         echo "Benchmarking Quantised Model (Latest):"
-        /tmp/llama-latest/llama-bench -m /tmp/qwen3-4B-IQ4_NL.gguf
+        /tmp/llama-latest/llama-bench -m /tmp/qwen3-4B-IQ4_NL.gguf -p 2048
         
     - name: Benchmark Models (latest) IQ4_NL (-rtr 1)
       run: |
         echo "Benchmarking Quantised Model (Latest):"
-        /tmp/llama-latest/llama-bench -rtr 1 -m /tmp/qwen3-4B-IQ4_NL.gguf
+        /tmp/llama-latest/llama-bench -rtr 1 -m /tmp/qwen3-4B-IQ4_NL.gguf  -p 2048
     
     - name: Benchmark Models (latest) IQ4_NL (-rtr 1) (Ver 2.0)
       run: |
         echo "Benchmarking Quantised Model (Latest):"
-        /tmp/2/llama-latest/llama-bench -rtr 1 -m /tmp/qwen3-4B-IQ4_NL.gguf        
+        /tmp/2/llama-latest/llama-bench -rtr 1 -m /tmp/qwen3-4B-IQ4_NL.gguf  -p 2048 
 
     - name: Benchmark Models (latest) IQ4_NL (-rtr 1) (Ver 3.0)
       run: |
         echo "Benchmarking Quantised Model (Latest):"
-        /tmp/3/llama-latest/llama-bench -rtr 1 -m /tmp/qwen3-4B-IQ4_NL.gguf
+        /tmp/3/llama-latest/llama-bench -rtr 1 -m /tmp/qwen3-4B-IQ4_NL.gguf  -p 2048
 
     - name: Benchmark Models (Prism) IQ4_NL
       run: |
          echo "Benchmarking Quantised Model (Prism):"
-         /tmp/llama-prism-b9596-9fcaed7/llama-bench -m /tmp/qwen3-4B-IQ4_NL.gguf
+         /tmp/llama-prism-b9596-9fcaed7/llama-bench -m /tmp/qwen3-4B-IQ4_NL.gguf  -p 2048
          rm /tmp/llama-prism-b9596-9fcaed7/libggml-cpu-sapphirerapids.so
          #if grep -q "avx512_bf16" /proc/cpuinfo; then
          #  echo Without SPR
@@ -209,7 +209,7 @@ jobs:
     - name: Benchmark Models (Prism) MXFP4
       run: |
         echo "Benchmarking Quantised Model (Prism):"
-        /tmp/llama-prism-b9596-9fcaed7/llama-bench -m /tmp/qwen3-4B-MXFP4.gguf    
+        /tmp/llama-prism-b9596-9fcaed7/llama-bench -m /tmp/qwen3-4B-MXFP4.gguf  -p 2048
         
 #    - name: Benchmark Models (latest) MXFP4
 #      run: |
@@ -219,22 +219,22 @@ jobs:
     - name: Benchmark Models (latest) MXFP4 (-rtr 1)
       run: |
         echo "Benchmarking Quantised Model (Latest):"
-        /tmp/llama-latest/llama-bench -rtr 1 -m /tmp/qwen3-4B-MXFP4.gguf
+        /tmp/llama-latest/llama-bench -rtr 1 -m /tmp/qwen3-4B-MXFP4.gguf  -p 2048
 
     - name: Benchmark Models (latest) MXFP4 (-rtr 1) (Ver 2.0)
       run: |
         echo "Benchmarking Quantised Model (Latest):"
-        /tmp/2/llama-latest/llama-bench -rtr 1 -m /tmp/qwen3-4B-MXFP4.gguf
+        /tmp/2/llama-latest/llama-bench -rtr 1 -m /tmp/qwen3-4B-MXFP4.gguf  -p 2048
 
     - name: Benchmark Models (latest) MXFP4 (-rtr 1) (Ver 3.0)
       run: |
         echo "Benchmarking Quantised Model (Latest):"
-        /tmp/3/llama-latest/llama-bench -rtr 1 -m /tmp/qwen3-4B-MXFP4.gguf
+        /tmp/3/llama-latest/llama-bench -rtr 1 -m /tmp/qwen3-4B-MXFP4.gguf  -p 2048
         
     - name: Benchmark Models (Prism) Q4_0
       run: |
         echo "Benchmarking Quantised Model (Prism):"
-        /tmp/llama-prism-b9596-9fcaed7/llama-bench -m /tmp/qwen3-4B-Q4_0.gguf
+        /tmp/llama-prism-b9596-9fcaed7/llama-bench -m /tmp/qwen3-4B-Q4_0.gguf  -p 2048
 
 #    - name: Benchmark Models (Prism) Q4_K
 #      run: |
@@ -244,27 +244,27 @@ jobs:
     - name: Benchmark Models (latest) Q4_0
       run: |
         echo "Benchmarking Quantised Model (Latest):"
-        /tmp/llama-latest/llama-bench -m /tmp/qwen3-4B-Q4_0.gguf
+        /tmp/llama-latest/llama-bench -m /tmp/qwen3-4B-Q4_0.gguf  -p 2048
 
 #    - name: Benchmark Models (latest) Q4_K
 #      run: |
 #        echo "Benchmarking Quantised Model (Latest):"
-#        /tmp/llama-latest/llama-bench -m /tmp/qwen3-4B-Q4_K.gguf        
+#        /tmp/llama-latest/llama-bench -m /tmp/qwen3-4B-Q4_K.gguf
 
     - name: Benchmark Models (latest) Q4_0 (-rtr 1)
       run: |
         echo "Benchmarking Quantised Model (Latest):"
-        /tmp/llama-latest/llama-bench -rtr 1 -m /tmp/qwen3-4B-Q4_0.gguf
+        /tmp/llama-latest/llama-bench -rtr 1 -m /tmp/qwen3-4B-Q4_0.gguf  -p 2048
 
     - name: Benchmark Models (latest) Q4_0 (-rtr 1) (Ver 2.0)
       run: |
         echo "Benchmarking Quantised Model (Latest):"
-        /tmp/2/llama-latest/llama-bench -rtr 1 -m /tmp/qwen3-4B-Q4_0.gguf
+        /tmp/2/llama-latest/llama-bench -rtr 1 -m /tmp/qwen3-4B-Q4_0.gguf  -p 2048
 
     - name: Benchmark Models (latest) Q4_0 (-rtr 1) (Ver 3.0)
       run: |
         echo "Benchmarking Quantised Model (Latest):"
-        /tmp/3/llama-latest/llama-bench -rtr 1 -m /tmp/qwen3-4B-Q4_0.gguf
+        /tmp/3/llama-latest/llama-bench -rtr 1 -m /tmp/qwen3-4B-Q4_0.gguf  -p 2048
 
 #    - name: Benchmark Models (latest) Q4_K (-rtr 1)
 #      run: |
