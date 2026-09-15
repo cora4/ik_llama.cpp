@@ -38,12 +38,12 @@ jobs:
             # wget -q https://github.com/cora4/ik_llama.cpp/releases/download/zen4-19-14370/llama-latest-bin-ubuntu-zen4.zip
           fi
         fi
-        wget -q https://github.com/cora4/ik_llama.cpp/releases/download/tgl-51-4669/llama-latest-bin-ubuntu-tgl.zip
+        wget -q https://github.com/cora4/ik_llama.cpp/releases/download/tgl-50-25542/llama-latest-bin-ubuntu-tgl.zip
                     
-        wget -q https://github.com/cora4/ik_llama.cpp/releases/download/tgl-52-16351/llama-latest-bin-ubuntu-tgl.zip -O llama-2.zip
-        wget -q https://github.com/cora4/ik_llama.cpp/releases/download/tgl-57-3150/llama-latest-bin-ubuntu-tgl.zip -O llama-3.zip
+        wget -q https://github.com/cora4/ik_llama.cpp/releases/download/tgl-51-4669/llama-latest-bin-ubuntu-tgl.zip -O llama-2.zip
+        #wget -q https://github.com/cora4/ik_llama.cpp/releases/download/tgl-57-3150/llama-latest-bin-ubuntu-tgl.zip -O llama-3.zip
         unzip -qo llama-2.zip -d /tmp/2/
-        unzip -qo llama-3.zip -d /tmp/3/
+        #unzip -qo llama-3.zip -d /tmp/3/
         
     - name: Download Dependencies
       id: dl
@@ -160,10 +160,6 @@ jobs:
         echo "Benchmarking Quantised Model (Latest):"
         /tmp/2/llama-latest/llama-bench -rtr 1 -m /tmp/qwen3-4B-IQ4_NL.gguf
 
-    - name: Benchmark Models (latest) IQ4_NL (-rtr 1) (Ver 3.0)
-      run: |
-        echo "Benchmarking Quantised Model (Latest):"
-        /tmp/3/llama-latest/llama-bench -rtr 1 -m /tmp/qwen3-4B-IQ4_NL.gguf
 
     - name: Benchmark Models (Prism) IQ4_NL
       run: |
@@ -226,10 +222,6 @@ jobs:
         echo "Benchmarking Quantised Model (Latest):"
         /tmp/2/llama-latest/llama-bench -rtr 1 -m /tmp/qwen3-4B-MXFP4.gguf
 
-    - name: Benchmark Models (latest) MXFP4 (-rtr 1) (Ver 3.0)
-      run: |
-        echo "Benchmarking Quantised Model (Latest):"
-        /tmp/3/llama-latest/llama-bench -rtr 1 -m /tmp/qwen3-4B-MXFP4.gguf
         
     - name: Benchmark Models (Prism) Q4_0
       run: |
@@ -260,11 +252,6 @@ jobs:
       run: |
         echo "Benchmarking Quantised Model (Latest):"
         /tmp/2/llama-latest/llama-bench -rtr 1 -m /tmp/qwen3-4B-Q4_0.gguf
-
-    - name: Benchmark Models (latest) Q4_0 (-rtr 1) (Ver 3.0)
-      run: |
-        echo "Benchmarking Quantised Model (Latest):"
-        /tmp/3/llama-latest/llama-bench -rtr 1 -m /tmp/qwen3-4B-Q4_0.gguf
 
 #    - name: Benchmark Models (latest) Q4_K (-rtr 1)
 #      run: |
