@@ -844,13 +844,25 @@ static void mul_mat_iq4_nl_r4_q8_2(int n, const void * vx, size_t bx, const Data
         qx[3] = _mm512_shuffle_epi8(values, _mm512_and_si512(_mm512_srli_epi16(bits2, 4), m4));
         return scales;
     };
-    auto dot = [&qx] (const int8_t * qy) {
-        const int32_t * y = (const int32_t *) qy;
+    auto dot = [&qx](const int8_t *qy) {
+        constexpr __mmask16 hi128 = 0xf0f0;
+        static inline int32_t load_i32 = [](const int8_t *p) {
+            return _mm_cvtsi128_si32(_mm_loadu_si32(p));
+        };
+        auto make_y = [&](int off0, int off1) {
+            const auto va = _mm512_set1_epi32(load_i32(qy + off0));
+            const auto vb = _mm512_set1_epi32(load_i32(qy + off1));
+            return _mm512_mask_blend_epi32(hi128, va, vb);
+        };
+        const auto y0 = make_y( 0, 16);
+        const auto y1 = make_y( 4, 20);
+        const auto y2 = make_y( 8, 24);
+        const auto y3 = make_y(12, 28);
         auto sumi = _mm512_setzero_si512();
-        sumi = _mm512_dpbusd_epi32(sumi, qx[0], _mm512_set1_epi32(y[0]));
-        sumi = _mm512_dpbusd_epi32(sumi, qx[1], _mm512_set1_epi32(y[1]));
-        sumi = _mm512_dpbusd_epi32(sumi, qx[2], _mm512_set1_epi32(y[2]));
-        sumi = _mm512_dpbusd_epi32(sumi, qx[3], _mm512_set1_epi32(y[3]));
+        sumi = _mm512_dpbusd_epi32(sumi, qx[0], y0);
+        sumi = _mm512_dpbusd_epi32(sumi, qx[1], y1);
+        sumi = _mm512_dpbusd_epi32(sumi, qx[2], y2);
+        sumi = _mm512_dpbusd_epi32(sumi, qx[3], y3);
         return sumi;
     };
     for (int ix = 0; ix < nrc_x; ix += 8) {
