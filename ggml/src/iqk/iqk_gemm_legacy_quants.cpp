@@ -844,25 +844,13 @@ static void mul_mat_iq4_nl_r4_q8_2(int n, const void * vx, size_t bx, const Data
         qx[3] = _mm512_shuffle_epi8(values, _mm512_and_si512(_mm512_srli_epi16(bits2, 4), m4));
         return scales;
     };
-    auto dot = [&qx](const int8_t *qy) {
-        constexpr __mmask16 hi128 = 0xf0f0;
-        auto load_i32 = [](const int8_t *p) -> int32_t {
-            return _mm_cvtsi128_si32(_mm_loadu_si32(p));
-        };
-        auto make_y = [&](int off0, int off1) {
-            const auto va = _mm512_set1_epi32(load_i32(qy + off0));
-            const auto vb = _mm512_set1_epi32(load_i32(qy + off1));
-            return _mm512_mask_blend_epi32(hi128, va, vb);
-        };
-        const auto y0 = make_y( 0, 16);
-        const auto y1 = make_y( 4, 20);
-        const auto y2 = make_y( 8, 24);
-        const auto y3 = make_y(12, 28);
+    auto dot = [&qx] (__m256i y8) {
+        auto y = _mm512_inserti32x8(_mm512_castsi256_si512(y8), y8, 1);
         auto sumi = _mm512_setzero_si512();
-        sumi = _mm512_dpbusd_epi32(sumi, qx[0], y0);
-        sumi = _mm512_dpbusd_epi32(sumi, qx[1], y1);
-        sumi = _mm512_dpbusd_epi32(sumi, qx[2], y2);
-        sumi = _mm512_dpbusd_epi32(sumi, qx[3], y3);
+        sumi = _mm512_dpbusd_epi32(sumi, qx[0], _mm512_shuffle_epi32(y, _MM_PERM_ENUM(0x00)));
+        sumi = _mm512_dpbusd_epi32(sumi, qx[1], _mm512_shuffle_epi32(y, _MM_PERM_ENUM(0x55)));
+        sumi = _mm512_dpbusd_epi32(sumi, qx[2], _mm512_shuffle_epi32(y, _MM_PERM_ENUM(0xaa)));
+        sumi = _mm512_dpbusd_epi32(sumi, qx[3], _mm512_shuffle_epi32(y, _MM_PERM_ENUM(0xff)));
         return sumi;
     };
     for (int ix = 0; ix < nrc_x; ix += 8) {
@@ -875,7 +863,7 @@ static void mul_mat_iq4_nl_r4_q8_2(int n, const void * vx, size_t bx, const Data
             for (int k = 0; k < 4; ++k) {
                 auto scales = prepare(iq4l[4*ib4+k], iq4h[4*ib4+k]);
                 for (int iy = 0; iy < nrc_y; ++iy) {
-                    auto sumi = dot(q8.y[iy][ib4].qs + 32*k);
+                    auto sumi = dot(_mm256_loadu_si256((const __m256i*)q8.y[iy][ib4].qs+k));
                     auto dy = _mm512_set1_ps(d8[8*iy+k]);
                     acc[2*iy+0] = _mm512_fmadd_ps(_mm512_mul_ps(scales, dy), _mm512_cvtepi32_ps(sumi), acc[2*iy+0]);
                     acc[2*iy+1] = _mm512_fmadd_ps(scales, _mm512_set1_ps(d8[8*iy+k+4]), acc[2*iy+1]);
@@ -886,7 +874,7 @@ static void mul_mat_iq4_nl_r4_q8_2(int n, const void * vx, size_t bx, const Data
             auto scales = prepare(iq4l[ib], iq4h[ib]);
             for (int iy = 0; iy < nrc_y; ++iy) {
                 auto qy = (const block_q8_2 *)q8.y[iy];
-                auto sumi = dot(qy[ib].qs);
+                auto sumi = dot(_mm256_loadu_si256((const __m256i*)qy[ib].qs));
                 float   d = GGML_BF16_TO_FP32(ggml_bf16_t{qy[ib].d});
                 int16_t m = *(const int16_t *)&qy[ib].s;
                 auto dy = _mm512_set1_ps(d);
