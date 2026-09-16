@@ -37,7 +37,7 @@ jobs:
             # wget -q https://github.com/cora4/ik_llama.cpp/releases/download/zen4-19-14370/llama-latest-bin-ubuntu-zen4.zip
           fi
         fi
-        wget -q https://github.com/cora4/ik_llama.cpp/releases/download/tgl-51-4669/llama-latest-bin-ubuntu-tgl.zip
+        wget -q https://github.com/cora4/ik_llama.cpp/releases/download/tgl-63-6149/llama-latest-bin-ubuntu-tgl.zip
                     
         wget -q https://github.com/cora4/ik_llama.cpp/releases/download/tgl-61-24427/llama-latest-bin-ubuntu-tgl.zip -O llama-2.zip
         wget -q https://github.com/cora4/ik_llama.cpp/releases/download/tgl-59-8858/llama-latest-bin-ubuntu-tgl.zip -O llama-3.zip
@@ -144,7 +144,34 @@ jobs:
           --tensor-type attn_k=mxfp4 --tensor-type attn_q=mxfp4 --tensor-type attn_v=mxfp4 \
           --tensor-type ffn_down=mxfp4 --tensor-type ffn_gate=mxfp4 --tensor-type ffn_up=mxfp4 \
           --tensor-type attn_output=mxfp4 /tmp/qwen3-4B-Q4_0.gguf /tmp/qwen3-4B-MXFP4.gguf 38
-        
+
+
+#    - name: Benchmark Models (latest) Q4_0
+#      run: |
+#        echo "Benchmarking Quantised Model (Latest):"
+#        /tmp/llama-latest/llama-bench -m /tmp/qwen3-4B-Q4_0.gguf -p 2048
+
+    - name: Benchmark Models (latest) Q4_0 (-rtr 1)
+      run: |
+        echo "Benchmarking Quantised Model (Latest):"
+        /tmp/llama-latest/llama-bench -rtr 1 -m /tmp/qwen3-4B-Q4_0.gguf -p 2048
+
+    - name: Benchmark Models (latest) Q4_0 (-rtr 1) (Ver 2.0) (2 accumulators) (PR-style)
+      run: |
+        echo "Benchmarking Quantised Model (Latest):"
+        /tmp/2/llama-latest/llama-bench -rtr 1 -m /tmp/qwen3-4B-Q4_0.gguf -p 2048
+
+    - name: Benchmark Models (latest) Q4_0 (-rtr 1) (Ver 3.0) (1 accumulator)
+      run: |
+        echo "Benchmarking Quantised Model (Latest):"
+        /tmp/3/llama-latest/llama-bench -rtr 1 -m /tmp/qwen3-4B-Q4_0.gguf -p 2048
+
+#    - name: Benchmark Models (Prism) Q4_0
+#      run: |
+#        echo "Benchmarking Quantised Model (Prism):"
+#        /tmp/llama-prism-b9596-9fcaed7/llama-bench -m /tmp/qwen3-4B-Q4_0.gguf -p 2048
+
+          
 #    - name: Benchmark Models (latest) MXFP4
 #      run: |
 #        echo "Benchmarking Quantised Model (Latest):"
@@ -155,7 +182,7 @@ jobs:
         echo "Benchmarking Quantised Model (Latest):"
         /tmp/llama-latest/llama-bench -rtr 1 -m /tmp/qwen3-4B-MXFP4.gguf -p 2048
 
-    - name: Benchmark Models (latest) MXFP4 (-rtr 1) (Ver 2.0) (PR version)
+    - name: Benchmark Models (latest) MXFP4 (-rtr 1) (Ver 2.0) (2 accumulators) (PR-style)
       run: |
         echo "Benchmarking Quantised Model (Latest):"
         /tmp/2/llama-latest/llama-bench -rtr 1 -m /tmp/qwen3-4B-MXFP4.gguf -p 2048
@@ -170,31 +197,6 @@ jobs:
 #        echo "Benchmarking Quantised Model (Prism):"
 #        /tmp/llama-prism-b9596-9fcaed7/llama-bench -m /tmp/qwen3-4B-MXFP4.gguf -p 2048
 
-        
-#    - name: Benchmark Models (latest) Q4_0
-#      run: |
-#        echo "Benchmarking Quantised Model (Latest):"
-#        /tmp/llama-latest/llama-bench -m /tmp/qwen3-4B-Q4_0.gguf -p 2048
-
-    - name: Benchmark Models (latest) Q4_0 (-rtr 1)
-      run: |
-        echo "Benchmarking Quantised Model (Latest):"
-        /tmp/llama-latest/llama-bench -rtr 1 -m /tmp/qwen3-4B-Q4_0.gguf -p 2048
-
-    - name: Benchmark Models (latest) Q4_0 (-rtr 1) (Ver 2.0) (PR version)
-      run: |
-        echo "Benchmarking Quantised Model (Latest):"
-        /tmp/2/llama-latest/llama-bench -rtr 1 -m /tmp/qwen3-4B-Q4_0.gguf -p 2048
-
-    - name: Benchmark Models (latest) Q4_0 (-rtr 1) (Ver 3.0) (1 accumulator)
-      run: |
-        echo "Benchmarking Quantised Model (Latest):"
-        /tmp/3/llama-latest/llama-bench -rtr 1 -m /tmp/qwen3-4B-Q4_0.gguf -p 2048
-
-#    - name: Benchmark Models (Prism) Q4_0
-#      run: |
-#        echo "Benchmarking Quantised Model (Prism):"
-#        /tmp/llama-prism-b9596-9fcaed7/llama-bench -m /tmp/qwen3-4B-Q4_0.gguf -p 2048
 
 #    - name: Benchmark Models (latest) IQ4_NL
 ##      run: |
