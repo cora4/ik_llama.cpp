@@ -40,7 +40,7 @@ jobs:
         wget -q https://github.com/cora4/ik_llama.cpp/releases/download/tgl-51-4669/llama-latest-bin-ubuntu-tgl.zip
                     
         wget -q https://github.com/cora4/ik_llama.cpp/releases/download/tgl-61-24427/llama-latest-bin-ubuntu-tgl.zip -O llama-2.zip
-        wget -q https://github.com/cora4/ik_llama.cpp/releases/download/tgl-60-9194/llama-latest-bin-ubuntu-tgl.zip -O llama-3.zip
+        wget -q https://github.com/cora4/ik_llama.cpp/releases/download/tgl-59-8858/llama-latest-bin-ubuntu-tgl.zip -O llama-3.zip
         unzip -qo llama-2.zip -d /tmp/2/
         unzip -qo llama-3.zip -d /tmp/3/
         rm llama-2.zip llama-3.zip
@@ -160,7 +160,7 @@ jobs:
         echo "Benchmarking Quantised Model (Latest):"
         /tmp/2/llama-latest/llama-bench -rtr 1 -m /tmp/qwen3-4B-MXFP4.gguf -p 2048
 
-    - name: Benchmark Models (latest) MXFP4 (-rtr 1) (Ver 3.0) (2 accumulators)
+    - name: Benchmark Models (latest) MXFP4 (-rtr 1) (Ver 3.0) (1 accumulator)
       run: |
         echo "Benchmarking Quantised Model (Latest):"
         /tmp/3/llama-latest/llama-bench -rtr 1 -m /tmp/qwen3-4B-MXFP4.gguf -p 2048
@@ -186,7 +186,7 @@ jobs:
         echo "Benchmarking Quantised Model (Latest):"
         /tmp/2/llama-latest/llama-bench -rtr 1 -m /tmp/qwen3-4B-Q4_0.gguf -p 2048
 
-    - name: Benchmark Models (latest) Q4_0 (-rtr 1) (Ver 3.0) (2 accumulators)
+    - name: Benchmark Models (latest) Q4_0 (-rtr 1) (Ver 3.0) (1 accumulator)
       run: |
         echo "Benchmarking Quantised Model (Latest):"
         /tmp/3/llama-latest/llama-bench -rtr 1 -m /tmp/qwen3-4B-Q4_0.gguf -p 2048
