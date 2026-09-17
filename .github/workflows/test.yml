@@ -23,7 +23,7 @@ jobs:
                   #exit 1
                 else
                   echo "Architecture: Emerald Rapids"
-                  exit 1
+                  #exit 1
                 fi
             #    wget -q https://github.com/cora4/ik_llama.cpp/releases/download/spr-18-15448/llama-latest-bin-ubuntu-spr.zip
             fi
