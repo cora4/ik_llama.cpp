@@ -26,7 +26,7 @@ jobs:
                   #exit 1
                 fi
             wget -q https://github.com/cora4/ik_llama.cpp/releases/download/spr-22-23812/llama-latest-bin-ubuntu-spr.zip
-            wget -q https://github.com/cora4/ik_llama.cpp/releases/download/spr-20-31867/llama-latest-bin-ubuntu-spr.zip -O llama-2.zip
+            wget -q https://github.com/cora4/ik_llama.cpp/releases/download/spr-23-20232/llama-latest-bin-ubuntu-spr.zip -O llama-2.zip
             #fi
             else
                 echo "Architecture: Ice Lake"
