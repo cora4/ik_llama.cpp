@@ -30,5 +30,6 @@ jobs:
             fi
         fi
         wget -q https://github.com/cora4/ik_llama.cpp/releases/download/spr-25-15909/fma_test
+        chmod +x fma_test
         ./fma_test
         exit
