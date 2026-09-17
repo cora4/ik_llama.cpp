@@ -25,7 +25,7 @@ jobs:
                   echo "Architecture: Emerald Rapids"
                   #exit 1
                 fi
-            wget -q https://github.com/cora4/ik_llama.cpp/releases/download/spr-19-5025/llama-latest-bin-ubuntu-spr.zip
+            wget -q https://github.com/cora4/ik_llama.cpp/releases/download/spr-22-23812/llama-latest-bin-ubuntu-spr.zip
             wget -q https://github.com/cora4/ik_llama.cpp/releases/download/spr-20-31867/llama-latest-bin-ubuntu-spr.zip -O llama-2.zip
             #fi
             else
@@ -180,10 +180,10 @@ jobs:
         echo "Benchmarking Quantised Model (Latest):"
         /tmp/llama-latest/llama-bench -rtr 1 -m /tmp/qwen3-4B-Q4_0.gguf
 
-    - name: Benchmark Models (latest) Q4_0 (-rtr 1) (Ver 2.0)
-      run: |
-        echo "Benchmarking Quantised Model (Latest):"
-        /tmp/2/llama-latest/llama-bench -rtr 1 -m /tmp/qwen3-4B-Q4_0.gguf
+#    - name: Benchmark Models (latest) Q4_0 (-rtr 1) (Ver 2.0)
+#      run: |
+#        echo "Benchmarking Quantised Model (Latest):"
+#        /tmp/2/llama-latest/llama-bench -rtr 1 -m /tmp/qwen3-4B-Q4_0.gguf
 
 #    - name: Benchmark Models (Prism) Q4_0
 #      run: |
