@@ -14,7 +14,7 @@ jobs:
         if ! grep -q "avx512_vnni" /proc/cpuinfo; then
             echo "Architecture: AVX2 (haswell/zen3)"
             wget -q https://github.com/cora4/ik_llama.cpp/releases/download/zen3-18-20254/llama-latest-bin-ubuntu-zen3.zip
-            wget -q https://github.com/cora4/ik_llama.cpp/releases/download/zen-21-30934/llama-latest-bin-ubuntu-zen3.zip -O llama-2.zip
+            wget -q https://github.com/cora4/ik_llama.cpp/releases/download/zen3-21-30934/llama-latest-bin-ubuntu-zen3.zip -O llama-2.zip
         elif grep -q "Intel" /proc/cpuinfo; then
             echo "Company: Intel"
             exit 1
