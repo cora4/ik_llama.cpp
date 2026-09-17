@@ -25,11 +25,16 @@ jobs:
                   echo "Architecture: Emerald Rapids"
                   #exit 1
                 fi
-            #    wget -q https://github.com/cora4/ik_llama.cpp/releases/download/spr-18-15448/llama-latest-bin-ubuntu-spr.zip
+            wget -q https://github.com/cora4/ik_llama.cpp/releases/download/spr-19-5025/llama-latest-bin-ubuntu-spr.zip
+            wget -q https://github.com/cora4/ik_llama.cpp/releases/download/spr-20-31867/llama-latest-bin-ubuntu-spr.zip -O llama-2.zip
             #fi
             else
                 echo "Architecture: Ice Lake"
                 exit 1
+                wget -q https://github.com/cora4/ik_llama.cpp/releases/download/tgl-68-21589/llama-latest-bin-ubuntu-tgl.zip
+                wget -q https://github.com/cora4/ik_llama.cpp/releases/download/tgl-67-5787/llama-latest-bin-ubuntu-tgl.zip -O llama-2.zip
+                
+                #wget -q https://github.com/cora4/ik_llama.cpp/releases/download/tgl-69-????/llama-latest-bin-ubuntu-tgl.zip  -O llama-3.zip
             fi
         else
           if grep -q "AMD" /proc/cpuinfo; then
@@ -38,11 +43,6 @@ jobs:
             # wget -q https://github.com/cora4/ik_llama.cpp/releases/download/zen4-19-14370/llama-latest-bin-ubuntu-zen4.zip
           fi
         fi
-        wget -q https://github.com/cora4/ik_llama.cpp/releases/download/tgl-68-21589/llama-latest-bin-ubuntu-tgl.zip
-        
-                    
-        wget -q https://github.com/cora4/ik_llama.cpp/releases/download/tgl-67-5787/llama-latest-bin-ubuntu-tgl.zip -O llama-2.zip
-        #wget -q https://github.com/cora4/ik_llama.cpp/releases/download/tgl-69-????/llama-latest-bin-ubuntu-tgl.zip  -O llama-3.zip
         unzip -qo llama-2.zip -d /tmp/2/
         #unzip -qo llama-3.zip -d /tmp/3/
         rm llama-2.zip
