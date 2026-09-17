@@ -146,6 +146,32 @@ jobs:
           --tensor-type attn_output=mxfp4 /tmp/qwen3-4B-Q4_0.gguf /tmp/qwen3-4B-MXFP4.gguf 38
 
 
+#    - name: Benchmark Models (latest) MXFP4
+#      run: |
+#        echo "Benchmarking Quantised Model (Latest):"
+#        /tmp/llama-latest/llama-bench -m /tmp/qwen3-4B-MXFP4.gguf -p
+
+    - name: Benchmark Models (latest) MXFP4 (-rtr 1)
+      run: |
+        echo "Benchmarking Quantised Model (Latest):"
+        /tmp/llama-latest/llama-bench -rtr 1 -m /tmp/qwen3-4B-MXFP4.gguf
+
+    - name: Benchmark Models (latest) MXFP4 (-rtr 1) (Ver 3.0) (MXFP4_R8)
+      run: |
+        echo "Benchmarking Quantised Model (Latest):"
+        /tmp/3/llama-latest/llama-bench -rtr 1 -m /tmp/qwen3-4B-MXFP4.gguf
+
+    - name: Benchmark Models (latest) MXFP4 (-rtr 1) (Ver 2.0) (2 accumulators) (PR-style)
+      run: |
+        echo "Benchmarking Quantised Model (Latest):"
+        /tmp/2/llama-latest/llama-bench -rtr 1 -m /tmp/qwen3-4B-MXFP4.gguf
+
+#    - name: Benchmark Models (Prism) MXFP4
+#      run: |
+#        echo "Benchmarking Quantised Model (Prism):"
+#        /tmp/llama-prism-b9596-9fcaed7/llama-bench -m /tmp/qwen3-4B-MXFP4.gguf
+
+
 #    - name: Benchmark Models (latest) Q4_0
 #      run: |
 #        echo "Benchmarking Quantised Model (Latest):"
@@ -172,33 +198,6 @@ jobs:
 #      run: |
 #        echo "Benchmarking Quantised Model (Prism):"
 #        /tmp/llama-prism-b9596-9fcaed7/llama-bench -m /tmp/qwen3-4B-Q4_0.gguf
-
-          
-#    - name: Benchmark Models (latest) MXFP4
-#      run: |
-#        echo "Benchmarking Quantised Model (Latest):"
-#        /tmp/llama-latest/llama-bench -m /tmp/qwen3-4B-MXFP4.gguf -p
-
-    - name: Benchmark Models (latest) MXFP4 (-rtr 1)
-      run: |
-        echo "Benchmarking Quantised Model (Latest):"
-        /tmp/llama-latest/llama-bench -rtr 1 -m /tmp/qwen3-4B-MXFP4.gguf
-
-    - name: Benchmark Models (latest) MXFP4 (-rtr 1) (Ver 3.0) (MXFP4_R8)
-      run: |
-        echo "Benchmarking Quantised Model (Latest):"
-        /tmp/3/llama-latest/llama-bench -rtr 1 -m /tmp/qwen3-4B-MXFP4.gguf
-
-    - name: Benchmark Models (latest) MXFP4 (-rtr 1) (Ver 2.0) (2 accumulators) (PR-style)
-      run: |
-        echo "Benchmarking Quantised Model (Latest):"
-        /tmp/2/llama-latest/llama-bench -rtr 1 -m /tmp/qwen3-4B-MXFP4.gguf
-
-        
-#    - name: Benchmark Models (Prism) MXFP4
-#      run: |
-#        echo "Benchmarking Quantised Model (Prism):"
-#        /tmp/llama-prism-b9596-9fcaed7/llama-bench -m /tmp/qwen3-4B-MXFP4.gguf
 
 
 #    - name: Benchmark Models (latest) IQ4_NL
