@@ -74,8 +74,6 @@ jobs:
           done
           cd build2
           zip -r9XD /tmp/llama-latest-bin-ubuntu-spr.zip *
-          mkdir build2/
-          cp /tmp/llama-latest-bin-ubuntu-spr.zip build2/
 
       - name: Upload Build Artifact
         if: ${{ always() && steps.cmake_build.outcome == 'success' }}
