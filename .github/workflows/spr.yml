@@ -36,9 +36,9 @@ jobs:
       - name: Toolchain workaround (GCC 13)
         run: |
           sudo apt-get update
-          sudo apt-get install -y gcc-14-x86-64-linux-gnu g++-14-x86-64-linux-gnu patchelf
-          echo "CC=x86_64-linux-gnu-gcc-14 -march=sapphirerapids" >> "$GITHUB_ENV"
-          echo "CXX=x86_64-linux-gnu-g++-14 -march=sapphirerapids" >> "$GITHUB_ENV"
+          sudo apt-get install -y gcc-13-x86-64-linux-gnu g++-13-x86-64-linux-gnu patchelf
+          echo "CC=x86_64-linux-gnu-gcc-13 -march=sapphirerapids -ffp-contract=fast" >> "$GITHUB_ENV"
+          echo "CXX=x86_64-linux-gnu-g++-13 -march=sapphirerapids -ffp-contract=fast" >> "$GITHUB_ENV"
       - name: Swap Endianness
         id: endianness
         if: ${{ matrix.build == 's390x' }}
@@ -49,8 +49,8 @@ jobs:
       - name: Build
         id: cmake_build
         run: |
-          x86_64-linux-gnu-g++-14 --version
-          x86_64-linux-gnu-gcc-14 --version
+          x86_64-linux-gnu-g++-13 --version
+          x86_64-linux-gnu-gcc-13 --version
           cmake -B build \
             -DCMAKE_BUILD_TYPE=Release \
             -DGGML_NATIVE=OFF \
