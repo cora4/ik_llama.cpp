@@ -26,8 +26,8 @@ jobs:
                     echo "Architecture: Emerald Rapids"
                 fi
                 exit 1
-                wget -q https://github.com/cora4/ik_llama.cpp/releases/download/spr-22-23812/llama-latest-bin-ubuntu-spr.zip
-                wget -q https://github.com/cora4/ik_llama.cpp/releases/download/spr-24-19022/llama-latest-bin-ubuntu-spr.zip -O llama-2.zip
+                wget -q https://github.com/cora4/ik_llama.cpp/releases/download/spr-24-19022/llama-latest-bin-ubuntu-spr.zip
+                wget -q https://github.com/cora4/ik_llama.cpp/releases/download/spr-25-15909/llama-latest-bin-ubuntu-spr.zip -O llama-2.zip
             else
                 if lscpu | grep -q "PLATINUM 8573C"; then
                     echo "No BF16"
@@ -35,8 +35,8 @@ jobs:
                     exit 1
                 fi
                 echo "Architecture: Ice Lake"
-                wget -q https://github.com/cora4/ik_llama.cpp/releases/download/tgl-68-21589/llama-latest-bin-ubuntu-tgl.zip
-                wget -q https://github.com/cora4/ik_llama.cpp/releases/download/tgl-70-31848/llama-latest-bin-ubuntu-tgl.zip -O llama-2.zip
+                wget -q https://github.com/cora4/ik_llama.cpp/releases/download/tgl-70-31848/llama-latest-bin-ubuntu-tgl.zip
+                wget -q https://github.com/cora4/ik_llama.cpp/releases/download/tgl-72-18147/llama-latest-bin-ubuntu-tgl.zip -O llama-2.zip
                 
                 #wget -q https://github.com/cora4/ik_llama.cpp/releases/download/tgl-69-????/llama-latest-bin-ubuntu-tgl.zip  -O llama-3.zip
             fi
