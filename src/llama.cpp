@@ -1753,6 +1753,11 @@ static bool llama_kv_cache_find_slot(
         return false;
     }
 
+    if (cache.used == 0) {
+        // an empty cache refills in append order, restoring index-order == position-order
+        cache.cells_disordered = false;
+    }
+
     uint32_t n_tested = 0;
 
     while (true) {
@@ -2451,6 +2456,7 @@ static void llama_kv_cache_clear(struct llama_kv_cache & cache) {
     }
     cache.head = 0;
     cache.used = 0;
+    cache.cells_disordered = false;
     cache.head_swa     = cache.sink_rows;
     cache.pos_base_swa = 0;
 
@@ -2670,6 +2676,7 @@ static void llama_kv_cache_seq_add(
     for (uint32_t i = 0; i < cache.size; ++i) {
         if (cache.cells[i].has_seq_id(seq_id) && cache.cells[i].pos >= p0 && cache.cells[i].pos < p1) {
             cache.has_shift = true;
+            cache.cells_disordered = true;
             cache.cells[i].pos   += delta;
             cache.cells[i].delta += delta;
 
@@ -6445,27 +6452,11 @@ static void llama_set_inputs(llama_context & lctx, const llama_batch & batch) {
             return batch.token ? batch.token[k] : img_tok;
         };
 
-        // snapshot before any update: one pass would let a token read an earlier token of this
-        // same ubatch as prior context
-        std::map<llama_seq_id, std::vector<llama_token>> snap;
-        for (int32_t i = 0; i < n_tokens; ++i) {
-            const llama_seq_id seq = batch.seq_id[i][0];
-            if (snap.count(seq)) {
-                continue;
-            }
-            auto & h = lctx.ple_hist[seq];
-            if (h.next_pos != batch.pos[i]) {
-                h.toks.assign(n_gram - 1, eos);
-            }
-            h.toks.resize(n_gram - 1, eos);
-            snap[seq] = h.toks;
-        }
-
         for (int32_t i = 0; i < n_tokens; ++i) {
             const llama_pos    pos = batch.pos[i];
             const llama_seq_id seq = batch.seq_id[i][0];
 
-            const auto & hist = snap[seq];
+            auto & hist = lctx.ple_hist[seq];
 
             // predecessor s (1-based) of this token: from the ubatch when it is there, from the
             // sequence's own history when it is not, EOS past a segment boundary
@@ -6474,11 +6465,9 @@ static void llama_set_inputs(llama_context & lctx, const llama_batch & batch) {
                 if (j >= 0 && batch.seq_id[j][0] == seq && batch.pos[j] == pos - s) {
                     return tok_of(j);
                 }
-                // s - i positions before this ubatch started, most recent last
-                const int32_t back = s - i;
-                const int32_t k    = (int32_t) hist.size() - back;
-                if (back > 0 && k >= 0 && pos - s >= 0) {
-                    return hist[k];
+                const llama_pos p = pos - s;
+                if (p >= 0 && p < (llama_pos) hist.size()) {
+                    return hist[p];
                 }
                 return eos;
             };
@@ -6506,12 +6495,10 @@ static void llama_set_inputs(llama_context & lctx, const llama_batch & batch) {
                 }
             }
 
-            auto & h = lctx.ple_hist[seq];
-            h.toks.push_back(tok_of(i));
-            if ((int32_t) h.toks.size() > n_gram - 1) {
-                h.toks.erase(h.toks.begin(), h.toks.end() - (n_gram - 1));
+            if ((llama_pos) hist.size() <= pos) {
+                hist.resize(pos + 1, eos);
             }
-            h.next_pos = pos + 1;
+            hist[pos] = tok_of(i);
         }
     }
 
@@ -7213,7 +7200,7 @@ static int llama_decode_internal(
         bool reset_previous = false;
         // update the kv ring buffer
         {
-            if ((llama_model_has_recurrent(&lctx.model) || llama_model_is_openpangu(&lctx.model)) && kv_self.head == 0) {
+            if (llama_model_has_recurrent(&lctx.model) && kv_self.head == 0) {
                 reset_previous = true;
             }
             kv_self.head += n_tokens;
@@ -7801,6 +7788,9 @@ static void llama_kv_cache_defrag_internal(struct llama_context & lctx) {
     // blocks are keyed by cell index, so moving cells changes every touched block's membership;
     // the pooled block keys must be rebuilt from the moved indexer keys
     lctx.qsa_pooled_stale = !kv_self.kp_l.empty();
+
+    // defrag moves cells from the end of the cache into earlier holes
+    kv_self.cells_disordered = true;
 
     //LLAMA_LOG_INFO("(tmp log) KV defrag cell moves: %u\n", n_moves);
 
@@ -9623,6 +9613,7 @@ enum llama_rope_type llama_rope_type(const struct llama_model * model) {
         case LLM_ARCH_DFLASH2:
         case LLM_ARCH_K2_HORIZON:   // NEOX, per the IFM fork that implements this arch
         case LLM_ARCH_GEMMA4_ASSISTANT:
+        case LLM_ARCH_LFM2:
             return LLAMA_ROPE_TYPE_NEOX;
 
         case LLM_ARCH_QWEN2VL:
@@ -9995,11 +9986,9 @@ void llama_kv_cache_clear(struct llama_context * ctx) {
 
 // Unified speculative-checkpoint
 static bool spec_ckpt_try_per_step(llama_kv_cache & kv, const llama_model & model, int max_tokens) {
-    // openPangu carries only a conv state (no SSM recurrent term), so the per-step
-    // path - which sizes itself from the ssm_* hparams (ssm_dt_rank etc, all zero
-    // here) - does not apply. Decline it so the checkpoint resolves to the whole-slot
-    // shadow (gpu-fallback), which is arch-agnostic.
-    if (model.arch == LLM_ARCH_OPENPANGU) {
+    // openPangu carries only a conv state and LFM2 a short-conv state (no SSM
+    // term); the per-step path would divide by zero (ssm_dt_rank == 0), decline
+    if (model.arch == LLM_ARCH_OPENPANGU || model.arch == LLM_ARCH_LFM2) {
         kv.save_per_step_ssm = false;
         return false;
     }
@@ -10334,6 +10323,9 @@ void llama_kv_cache_seq_cp(struct llama_context * ctx, llama_seq_id seq_id_src, 
         return;
     }
     llama_kv_cache_seq_cp(ctx->kv_self, seq_id_src, seq_id_dst, p0, p1);
+    if (auto it = ctx->ple_hist.find(seq_id_src); it != ctx->ple_hist.end()) {
+        ctx->ple_hist[seq_id_dst] = it->second;
+    }
 }
 
 void llama_kv_cache_seq_keep(struct llama_context * ctx, llama_seq_id seq_id) {
@@ -10367,11 +10359,29 @@ llama_pos llama_kv_cache_swa_rewind_floor(const struct llama_context * ctx) {
     return ctx->kv_self.pos_base_swa + (llama_pos) ctx->kv_self.window_swa;
 }
 
-llama_pos llama_kv_cache_seq_pos_min(struct llama_context * ctx, llama_seq_id seq_id) {
-    if (ctx->kv_self.hybrid || ctx->kv_self.recurrent) {
-        return llama_kv_cache_seq_pos_max(ctx->kv_self, seq_id);
+llama_pos llama_kv_cache_n_swa(const struct llama_context * ctx) {
+    if (!ctx || !ctx->kv_self.any_compacted()) {
+        return 0;
     }
-    return llama_kv_cache_seq_pos_min(ctx->kv_self, seq_id);
+    // Recurrent/hybrid models cannot be rolled back because of
+    // other compression ratios, so we return 0 for n_swa here
+    if (llama_model_has_recurrent(&ctx->model)) {
+        return 0;
+    }
+    return (llama_pos)ctx->kv_self.window_swa;
+}
+
+llama_pos llama_kv_cache_seq_pos_min(struct llama_context * ctx, llama_seq_id seq_id) {
+    llama_pos pos_min;
+    if (ctx->kv_self.hybrid || ctx->kv_self.recurrent) {
+        pos_min = llama_kv_cache_seq_pos_max(ctx->kv_self, seq_id);
+    } else {
+        pos_min = llama_kv_cache_seq_pos_min(ctx->kv_self, seq_id);
+    }
+    if (llama_kv_cache_is_compacted(ctx)) {
+        pos_min = std::max(pos_min, ctx->kv_self.pos_base_swa);
+    }
+    return pos_min;
 }
 
 llama_pos llama_kv_cache_seq_pos_max(struct llama_context * ctx, llama_seq_id seq_id) {
@@ -11012,6 +11022,7 @@ struct llama_data_read {
 
             llama_batch batch = llama_batch_init(cell_count, 0, 1);
             batch.n_tokens = cell_count;
+            bool disordered = false;
             for (uint32_t i = 0; i < cell_count; ++i) {
                 llama_pos pos;
                 uint32_t n_seq_id;
@@ -11025,6 +11036,9 @@ struct llama_data_read {
                     return false;
                 }
 
+                if (i > 0 && pos < batch.pos[i - 1]) {
+                    disordered = true;
+                }
                 batch.pos[i] = pos;
                 batch.n_seq_id[i] = 1;
                 batch.seq_id[i][0] = dest_seq_id;
@@ -11033,6 +11047,9 @@ struct llama_data_read {
                 llama_batch_free(batch);
                 LLAMA_LOG_ERROR("%s: failed to find available cells in kv cache\n", __func__);
                 return false;
+            }
+            if (disordered) {
+                kv_self.cells_disordered = true;
             }
 
             // DEBUG CHECK: kv_self.head should be our first cell, kv_self.head + cell_count - 1 should be our last cell (verify seq_id and pos values)
@@ -11056,6 +11073,8 @@ struct llama_data_read {
 
             llama_kv_cache_clear(kv_self);
 
+            llama_pos prev_pos = -1;
+
             for (uint32_t i = 0; i < cell_count; ++i) {
                 llama_kv_cell & cell = kv_self.cells[i];
 
@@ -11066,6 +11085,11 @@ struct llama_data_read {
                 read_to(&n_seq_id, sizeof(n_seq_id));
 
                 cell.pos = pos;
+
+                if (pos < prev_pos) {
+                    kv_self.cells_disordered = true;
+                }
+                prev_pos = pos;
 
                 for (uint32_t j = 0; j < n_seq_id; ++j) {
                     llama_seq_id seq_id;
