@@ -1226,10 +1226,6 @@ inline void prepare_mxfp4_quants_avx2(const uint8_t * qs, __m256i * v, const __m
 
 inline __m256i accum_mxfp4_quants(const __m256i * v, const int8_t * qs) {
 #ifdef HAVE_VNNI256
-    auto y4l = _mm_loadu_si128((const __m128i*)qs+0);
-    auto y4h = _mm_loadu_si128((const __m128i*)qs+1);
-    auto yl  = MM256_SET1_M128I(y4l);
-    auto yh  = MM256_SET1_M128I(y4h);
     auto sumi = _mm256_setzero_si256();
     sumi = ggml_mm256_dpbusd_epi32(sumi, v[0], _mm256_set1_epi32(*((const int32_t *)(qs +  0))));
     sumi = ggml_mm256_dpbusd_epi32(sumi, v[1], _mm256_set1_epi32(*((const int32_t *)(qs +  4))));
