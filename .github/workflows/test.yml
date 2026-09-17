@@ -30,6 +30,7 @@ jobs:
                 wget -q https://github.com/cora4/ik_llama.cpp/releases/download/spr-24-19022/llama-latest-bin-ubuntu-spr.zip -O llama-2.zip
             else
                 if lscpu | grep -q "PLATINUM 8573C"; then
+                    echo "No BF16"
                     echo "Architecture: Emerald Rapids"
                     exit 1
                 fi
