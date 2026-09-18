@@ -25,8 +25,8 @@ jobs:
                 else
                     echo "Architecture: Emerald Rapids"
                 fi
-                wget -q https://github.com/cora4/ik_llama.cpp/releases/download/spr-24-19022/llama-latest-bin-ubuntu-spr.zip
-                wget -q https://github.com/cora4/ik_llama.cpp/releases/download/spr-27-16517/llama-latest-bin-ubuntu-spr.zip -O llama-2.zip
+                wget -q https://github.com/cora4/ik_llama.cpp/releases/download/spr-27-16517/llama-latest-bin-ubuntu-spr.zip
+                wget -q https://github.com/cora4/ik_llama.cpp/releases/download/spr-28-25/llama-latest-bin-ubuntu-spr.zip -O llama-2.zip
             else
                 if lscpu | grep -q "PLATINUM 8573C"; then
                     echo "No BF16"
@@ -34,16 +34,16 @@ jobs:
                     exit 1
                 fi
                 echo "Architecture: Ice Lake"
-                wget -q https://github.com/cora4/ik_llama.cpp/releases/download/tgl-70-31848/llama-latest-bin-ubuntu-tgl.zip
-                wget -q https://github.com/cora4/ik_llama.cpp/releases/download/tgl-74-3063/llama-latest-bin-ubuntu-tgl.zip -O llama-2.zip
+                wget -q https://github.com/cora4/ik_llama.cpp/releases/download/tgl-75-30239/llama-latest-bin-ubuntu-tgl.zip
+                wget -q https://github.com/cora4/ik_llama.cpp/releases/download/tgl-78-9774/llama-latest-bin-ubuntu-tgl.zip -O llama-2.zip
                 
                 #wget -q https://github.com/cora4/ik_llama.cpp/releases/download/tgl-69-????/llama-latest-bin-ubuntu-tgl.zip  -O llama-3.zip
             fi
         else
             if grep -q "AMD" /proc/cpuinfo; then
                 echo "Architecture: Zen 4"
-                wget -q https://github.com/cora4/ik_llama.cpp/releases/download/tgl-70-31848/llama-latest-bin-ubuntu-tgl.zip
-                wget -q https://github.com/cora4/ik_llama.cpp/releases/download/tgl-74-3063/llama-latest-bin-ubuntu-tgl.zip -O llama-2.zip
+                wget -q https://github.com/cora4/ik_llama.cpp/releases/download/tgl-75-30239/llama-latest-bin-ubuntu-tgl.zip
+                wget -q https://github.com/cora4/ik_llama.cpp/releases/download/tgl-78-9774/llama-latest-bin-ubuntu-tgl.zip -O llama-2.zip
                 # wget -q https://github.com/cora4/ik_llama.cpp/releases/download/zen4-19-14370/llama-latest-bin-ubuntu-zen4.zip
             fi
         fi
