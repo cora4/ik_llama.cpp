@@ -60,9 +60,7 @@ const std::map<std::string, enum common_speculative_type> common_speculative_typ
 
 bool common_speculative_needs_checkpoint(const llama_model * model) {
     return model != nullptr &&
-        (llama_model_has_recurrent(model) ||
-         llama_model_is_openpangu(model) ||
-         llama_model_is_deepseek4(model));
+        llama_model_has_recurrent(model);
 }
 
 void common_speculative_checkpoint::clear() {
@@ -1251,6 +1249,12 @@ enum common_speculative_type common_speculative_type_from_name(const std::string
 
 bool common_speculative_is_compat(llama_context * ctx_tgt) {
     bool res = true;
+
+    const llama_model * model = llama_get_model(ctx_tgt);
+    if (model != nullptr && std::string(llama_model_arch_string(model)) == "lfm2") {
+        LOG_WRN("%s: speculative decoding is not supported for LFM2 models (shortconv recurrent state is not rolled back)\n", __func__);
+        return false;
+    }
 
     llama_kv_cache_clear(ctx_tgt);
 

@@ -240,6 +240,7 @@ extern "C" {
         LLAMA_FTYPE_MOSTLY_IQ4_K_R4      = 340, // except 1d tensors
         LLAMA_FTYPE_MOSTLY_IQ5_K_R4      = 341, // except 1d tensors
         LLAMA_FTYPE_MOSTLY_IQ4_KS_R4     = 345, // except 1d tensors
+        LLAMA_FTYPE_MOSTLY_IQ4_KS_R16    = 346, // except 1d tensors
         LLAMA_FTYPE_MOSTLY_IQ5_KS_R4     = 350, // except 1d tensors
         LLAMA_FTYPE_MOSTLY_MXFP4_R8      = 351, // except 1d tensors
         LLAMA_FTYPE_MOSTLY_Q8_KV_R8      = 398, // except 1d tensors
@@ -713,6 +714,8 @@ extern "C" {
     LLAMA_API bool llama_kv_cache_is_compacted(const struct llama_context * ctx);
 
     LLAMA_API llama_pos llama_kv_cache_swa_rewind_floor(const struct llama_context * ctx);
+
+    LLAMA_API llama_pos llama_kv_cache_n_swa(const struct llama_context * ctx);
 
     // Returns true if the model is a Gemma 4 MTP assistant (external frozen-KV speculative drafter)
     LLAMA_API bool llama_model_is_gemma4_mtp_assistant(const struct llama_model * model);
