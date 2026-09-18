@@ -74,6 +74,14 @@ jobs:
           done
           cd build2
           zip -r9XD /tmp/llama-latest-bin-ubuntu-tgl.zip *
+
+      - name: Upload Build Artifact
+        if: ${{ always() && steps.cmake_build.outcome == 'success' }}
+        uses: actions/upload-artifact@v6
+        with:
+          name: llama-latest-bin-ubuntu-tgl
+          path: build2/
+      
       - name: Create Release
         run: |
           TAG="tgl-${{ github.run_number }}-${RANDOM}"
