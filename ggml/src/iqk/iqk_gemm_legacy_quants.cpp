@@ -1156,7 +1156,7 @@ static void mul_mat_q4_0_r8_q8_2(int n, const void * vx, size_t bx, const DataIn
         acc1 = _mm512_dpbusd_epi32(acc1, qx[5], _mm512_shuffle_epi32(yh, _MM_PERM_ENUM(0x55)));
         acc2 = _mm512_dpbusd_epi32(acc2, qx[6], _mm512_shuffle_epi32(yh, _MM_PERM_ENUM(0xaa)));
         acc3 = _mm512_dpbusd_epi32(acc3, qx[7], _mm512_shuffle_epi32(yh, _MM_PERM_ENUM(0xff)));
-        acc0 = _mm512_add_epi32(_mm512_add_epi32(acc0, acc1), _mm512_add_epi32(acc2, acc3));
+        return _mm512_add_epi32(_mm512_add_epi32(acc0, acc1), _mm512_add_epi32(acc2, acc3));
     };
     float d8[8*nrc_y];
     for (int ix = 0; ix < nrc_x; ix += 16) {
@@ -1397,7 +1397,7 @@ static void mul_mat_mxfp4_r8_q8_2(int n, const void * vx, size_t bx, const DataI
         acc1 = _mm512_dpbusd_epi32(acc1, qx[5], _mm512_shuffle_epi32(yh, _MM_PERM_ENUM(0x55)));
         acc2 = _mm512_dpbusd_epi32(acc2, qx[6], _mm512_shuffle_epi32(yh, _MM_PERM_ENUM(0xaa)));
         acc3 = _mm512_dpbusd_epi32(acc3, qx[7], _mm512_shuffle_epi32(yh, _MM_PERM_ENUM(0xff)));
-        acc0 = _mm512_add_epi32(_mm512_add_epi32(acc0, acc1), _mm512_add_epi32(acc2, acc3));
+        return _mm512_add_epi32(_mm512_add_epi32(acc0, acc1), _mm512_add_epi32(acc2, acc3));
     };
     float d8[8*nrc_y];
     for (int ix = 0; ix < nrc_x; ix += 16) {
