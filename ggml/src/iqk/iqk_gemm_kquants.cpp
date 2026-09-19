@@ -2804,9 +2804,9 @@ bool iqk_set_kernels_kquants(int ne00, int typeA, int typeB, std::array<mul_mat_
             break;
         case GGML_TYPE_Q8_K_R8:
             IQK_SET_MUL_MAT_FUNCTIONS(mul_mat_q8_k_r8_q8_k, kernels)
-//#ifdef HAVE_FANCY_SIMD
-//            func16 = mul_mat_q8_k_r8_q8_k<16>;
-//#endif
+#ifdef HAVE_FANCY_SIMD
+            func16 = mul_mat_q8_k_r8_q8_k<16>;
+#endif
             break;
 #ifdef HAVE_FANCY_SIMD
         case GGML_TYPE_Q8_K_R16:
