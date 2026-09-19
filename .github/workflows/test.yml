@@ -111,17 +111,17 @@ jobs:
 #          --allow-requantize --token-embedding-type q4_0 \
 #          --ffn-down-type iq4_kt --attn-v-type iq4_kt /tmp/qwen3-4B-Q4_0.gguf /tmp/qwen3-4B-IQ4_KT.gguf iq4_kt
 
-    - name: Quantise Model IQ4_KS_R4
+    - name: Quantise Model IQ6_K
       run: |
         /tmp/llama-latest/llama-quantize \
-          --allow-requantize --token-embedding-type iq4_ks \
-          --ffn-down-type iq4_ks_r4 --attn-v-type iq4_ks_r4 /tmp/qwen3-4B-Q4_0.gguf /tmp/qwen3-4B-IQ4_KS_R4.gguf iq4_ks_r4
+          --allow-requantize --token-embedding-type iq6_k \
+          --ffn-down-type iq6_k --attn-v-type iq6_k /tmp/qwen3-4B-Q4_0.gguf /tmp/qwen3-4B-IQ6_K.gguf iq6_k
 
-    - name: Quantise Model IQ4_KS_R16
+    - name: Quantise Model Q6_K
       run: |
         /tmp/llama-latest/llama-quantize \
-          --allow-requantize --token-embedding-type iq4_ks \
-          --ffn-down-type iq4_ks_r16 --attn-v-type iq4_ks_r16 /tmp/qwen3-4B-Q4_0.gguf /tmp/qwen3-4B-IQ4_KS_R16.gguf iq4_ks_r16
+          --allow-requantize --token-embedding-type Q6_K \
+          --ffn-down-type Q6_K --attn-v-type Q6_K /tmp/qwen3-4B-Q4_0.gguf /tmp/qwen3-4B-Q6_K.gguf Q6_K
           
 #    - name: Quantise Model IQ4_NL
 #      run: |
@@ -237,25 +237,25 @@ jobs:
 #        /tmp/llama-latest/llama-bench -m /tmp/qwen3-4B-IQ4_KT.gguf
 
         
-    - name: Benchmark Models (latest) IQ4_KS_R4
+    - name: Benchmark Models (latest) IQ6_K
       run: |
         echo "Benchmarking Quantised Model (Latest):"
-        /tmp/llama-latest/llama-bench -m /tmp/qwen3-4B-IQ4_KS_R4.gguf
+        /tmp/llama-latest/llama-bench -m /tmp/qwen3-4B-IQ6_K.gguf
 
-    - name: Benchmark Models (latest) IQ4_KS_R16
+    - name: Benchmark Models (latest) Q6_K
       run: |
         echo "Benchmarking Quantised Model (Latest):"
-        /tmp/llama-latest/llama-bench -m /tmp/qwen3-4B-IQ4_KS_R16.gguf
+        /tmp/llama-latest/llama-bench -m /tmp/qwen3-4B-Q6_K.gguf
 
-    - name: Benchmark Models (latest) IQ4_KS_R4 (-rtr 1)
+    - name: Benchmark Models (latest) IQ6_K (-rtr 1)
       run: |
         echo "Benchmarking Quantised Model (Latest):"
-        /tmp/llama-latest/llama-bench -rtr 1 -m /tmp/qwen3-4B-IQ4_KS_R4.gguf
+        /tmp/llama-latest/llama-bench -rtr 1 -m /tmp/qwen3-4B-IQ6_K.gguf
         
-    - name: Benchmark Models (latest) IQ4_KS_R16 (-rtr 1)
+    - name: Benchmark Models (latest) Q6_K (-rtr 1)
       run: |
         echo "Benchmarking Quantised Model (Latest):"
-        /tmp/llama-latest/llama-bench -rtr 1 -m /tmp/qwen3-4B-IQ4_KS_R16.gguf
+        /tmp/llama-latest/llama-bench -rtr 1 -m /tmp/qwen3-4B-Q6_K.gguf
 
 
 #    - name: Benchmark Models (Prism) Q4_K
