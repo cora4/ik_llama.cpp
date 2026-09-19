@@ -117,12 +117,12 @@ jobs:
           --allow-requantize --token-embedding-type iq4_ks \
           --ffn-down-type iq4_ks_r16 --attn-v-type iq4_ks_r16 /tmp/qwen3-4B-Q4_0.gguf /tmp/qwen3-4B-IQ4_KS_R16.gguf iq4_ks_r16
           
-#    - name: Quantise Model IQ4_NL
-#      run: |
-#        wget -q https://github.com/cora4/kernel_build_action/releases/download/main-1/xaa -O /tmp/xaa
-#        wget -q https://github.com/cora4/kernel_build_action/releases/download/main-1/xab -O /tmp/xab
-##        cat /tmp/xaa /tmp/xab > /tmp/qwen3-4B-IQ4_NL.gguf
-#        rm /tmp/xaa /tmp/xab
+    - name: Quantise Model IQ4_NL
+      run: |
+        wget -q https://github.com/cora4/kernel_build_action/releases/download/main-1/xaa -O /tmp/xaa
+        wget -q https://github.com/cora4/kernel_build_action/releases/download/main-1/xab -O /tmp/xab
+        cat /tmp/xaa /tmp/xab > /tmp/qwen3-4B-IQ4_NL.gguf
+        rm /tmp/xaa /tmp/xab
 
 #         /tmp/llama-prism-b9596-9fcaed7/llama-quantize \
 #          --allow-requantize --token-embedding-type iq4_nl \
@@ -183,15 +183,15 @@ jobs:
 #        /tmp/llama-prism-b9596-9fcaed7/llama-bench -m /tmp/qwen3-4B-Q4_0.gguf
 
 
-#    - name: Benchmark Models (latest) IQ4_NL
-##      run: |
-#        echo "Benchmarking Quantised Model (Latest):"
-#        /tmp/llama-latest/llama-bench -m /tmp/qwen3-4B-IQ4_NL.gguf
+    - name: Benchmark Models (latest) IQ4_NL
+      run: |
+        echo "Benchmarking Quantised Model (Latest):"
+        /tmp/llama-latest/llama-bench -m /tmp/qwen3-4B-IQ4_NL.gguf
         
-#    - name: Benchmark Models (latest) IQ4_NL (-rtr 1)
-#      run: |
-#        echo "Benchmarking Quantised Model (Latest):"
-#        /tmp/llama-latest/llama-bench -rtr 1 -m /tmp/qwen3-4B-IQ4_NL.gguf
+    - name: Benchmark Models (latest) IQ4_NL (-rtr 1)
+      run: |
+        echo "Benchmarking Quantised Model (Latest):"
+        /tmp/llama-latest/llama-bench -rtr 1 -m /tmp/qwen3-4B-IQ4_NL.gguf
     
 #    - name: Benchmark Models (latest) IQ4_NL (-rtr 1) (Ver 2.0)
 ##      run: |
@@ -248,6 +248,7 @@ jobs:
       run: |
         echo "Benchmarking Quantised Model (Latest):"
         /tmp/llama-latest/llama-bench -rtr 1 -m /tmp/qwen3-4B-IQ4_KS_R16.gguf
+        
 #    - name: Benchmark Models (Prism) Q4_K
 #      run: |
 #        echo "Benchmarking Quantised Model (Prism):"
