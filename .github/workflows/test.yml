@@ -44,7 +44,7 @@ jobs:
                 # wget -q https://github.com/cora4/ik_llama.cpp/releases/download/zen4-19-14370/llama-latest-bin-ubuntu-zen4.zip
             fi
         fi
-        wget -q https://github.com/cora4/ik_llama.cpp/releases/download/tgl-79-15919/llama-latest-bin-ubuntu-tgl.zip
+        wget -q https://github.com/cora4/ik_llama.cpp/releases/download/tgl-83-32393/llama-latest-bin-ubuntu-tgl.zip
         #unzip -qo llama-2.zip -d /tmp/2/
         #unzip -qo llama-3.zip -d /tmp/3/
         #rm llama-2.zip
@@ -131,9 +131,9 @@ jobs:
 #          --tensor-type attn_output=iq4_nl /tmp/qwen3-4B-Q4_0.gguf /tmp/qwen3-4B-IQ4_NL.gguf iq4_nl
           
 
-#    - name: Quantise Model IQ4_XS
-#      run: |
-#        wget -q https://github.com/cora4/kernel_build_action/releases/download/main-33/qwen3-4B-IQ4_XS.gguf -O /tmp/qwen3-4B-IQ4_XS.gguf
+    - name: Quantise Model IQ4_XS
+      run: |
+        wget -q https://github.com/cora4/kernel_build_action/releases/download/main-33/qwen3-4B-IQ4_XS.gguf -O /tmp/qwen3-4B-IQ4_XS.gguf
 
 #        /tmp/llama-prism-b9596-9fcaed7/llama-quantize \
 #          --allow-requantize --token-embedding-type iq4_xs \
@@ -142,24 +142,24 @@ jobs:
 #          --tensor-type attn_output=iq4_xs /tmp/qwen3-4B-Q4_0.gguf /tmp/qwen3-4B-IQ4_XS.gguf iq4_xs
 
 
-#    - name: Quantise Model MXFP4
-#      run: |
-#        /tmp/llama-prism-b9596-9fcaed7/llama-quantize \
-#          --allow-requantize --token-embedding-type mxfp4 \
-#          --tensor-type attn_k=mxfp4 --tensor-type attn_q=mxfp4 --tensor-type attn_v=mxfp4 \
-#          --tensor-type ffn_down=mxfp4 --tensor-type ffn_gate=mxfp4 --tensor-type ffn_up=mxfp4 \
-#          --tensor-type attn_output=mxfp4 /tmp/qwen3-4B-Q4_0.gguf /tmp/qwen3-4B-MXFP4.gguf 38
+    - name: Quantise Model MXFP4
+      run: |
+        /tmp/llama-prism-b9596-9fcaed7/llama-quantize \
+          --allow-requantize --token-embedding-type mxfp4 \
+          --tensor-type attn_k=mxfp4 --tensor-type attn_q=mxfp4 --tensor-type attn_v=mxfp4 \
+          --tensor-type ffn_down=mxfp4 --tensor-type ffn_gate=mxfp4 --tensor-type ffn_up=mxfp4 \
+          --tensor-type attn_output=mxfp4 /tmp/qwen3-4B-Q4_0.gguf /tmp/qwen3-4B-MXFP4.gguf 38
 
 
 #    - name: Benchmark Models (latest) MXFP4
 #      run: |
 #        echo "Benchmarking Quantised Model (Latest):"
-#        /tmp/llama-latest/llama-bench -m /tmp/qwen3-4B-MXFP4.gguf -p
+#        /tmp/llama-latest/llama-bench -m /tmp/qwen3-4B-MXFP4.gguf
 
-#    - name: Benchmark Models (latest) MXFP4 (-rtr 1)
-#      run: |
-#        echo "Benchmarking Quantised Model (Latest):"
-#        /tmp/llama-latest/llama-bench -rtr 1 -m /tmp/qwen3-4B-MXFP4.gguf
+    - name: Benchmark Models (latest) MXFP4 (-rtr 1)
+      run: |
+        echo "Benchmarking Quantised Model (Latest):"
+        /tmp/llama-latest/llama-bench -rtr 1 -m /tmp/qwen3-4B-MXFP4.gguf
 
 #    - name: Benchmark Models (Prism) MXFP4
 #      run: |
@@ -192,11 +192,6 @@ jobs:
       run: |
         echo "Benchmarking Quantised Model (Latest):"
         /tmp/llama-latest/llama-bench -rtr 1 -m /tmp/qwen3-4B-IQ4_NL.gguf
-    
-#    - name: Benchmark Models (latest) IQ4_NL (-rtr 1) (Ver 2.0)
-##      run: |
-#        echo "Benchmarking Quantised Model (Latest):"
-#        /tmp/2/llama-latest/llama-bench -rtr 1 -m /tmp/qwen3-4B-IQ4_NL.gguf
 
 
     #- name: Benchmark Models (Prism) IQ4_NL
@@ -208,17 +203,17 @@ jobs:
     #     #  echo Without SPR
     #     #  /tmp/llama-prism-b9596-9fcaed7/llama-bench -m /tmp/qwen3-4B-IQ4_NL.gguf
     #     #fi
-         
-#    - name: Benchmark Models (latest) IQ4_XS (-rtr 1)
-#      run: |
-#        echo "Benchmarking Quantised Model (Latest):"
-#        /tmp/llama-latest/llama-bench -rtr 1 -m /tmp/qwen3-4B-IQ4_XS.gguf
 
-#    - name: Benchmark Models (latest) IQ4_XS
-#      run: |
-#        echo "Benchmarking Quantised Model (Latest):"
-#        /tmp/llama-latest/llama-bench -m /tmp/qwen3-4B-IQ4_XS.gguf        
+    - name: Benchmark Models (latest) IQ4_XS
+      run: |
+        echo "Benchmarking Quantised Model (Latest):"
+        /tmp/llama-latest/llama-bench -m /tmp/qwen3-4B-IQ4_XS.gguf        
 
+    - name: Benchmark Models (latest) IQ4_XS (-rtr 1)
+      run: |
+        echo "Benchmarking Quantised Model (Latest):"
+        /tmp/llama-latest/llama-bench -rtr 1 -m /tmp/qwen3-4B-IQ4_XS.gguf
+        
 #    - name: Benchmark Models (Prism) IQ4_XS
 #      run: |
 #        echo "Benchmarking Quantised Model (Prism):"
@@ -239,6 +234,7 @@ jobs:
       run: |
         echo "Benchmarking Quantised Model (Latest):"
         /tmp/llama-latest/llama-bench -m /tmp/qwen3-4B-IQ4_KS_R16.gguf
+        
     - name: Benchmark Models (latest) IQ4_KS_R4 (-rtr 1)
       run: |
         echo "Benchmarking Quantised Model (Latest):"
