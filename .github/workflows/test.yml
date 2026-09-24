@@ -44,8 +44,8 @@ jobs:
                 # wget -q https://github.com/cora4/ik_llama.cpp/releases/download/zen4-19-14370/llama-latest-bin-ubuntu-zen4.zip
             fi
         fi
-        wget -q https://github.com/cora4/ik_llama.cpp/releases/download/tgl-83-32393/llama-latest-bin-ubuntu-tgl.zip
-        wget -q https://github.com/cora4/ik_llama.cpp/releases/download/tgl-69-????/llama-latest-bin-ubuntu-tgl.zip  -O llama-2.zip
+        wget -q https://github.com/cora4/ik_llama.cpp/releases/download/tgl-85-9161/llama-latest-bin-ubuntu-tgl.zip
+        wget -q https://github.com/cora4/ik_llama.cpp/releases/download/tgl-86-16837/llama-latest-bin-ubuntu-tgl.zip  -O llama-2.zip
         unzip -qo llama-2.zip -d /tmp/2/
         #unzip -qo llama-3.zip -d /tmp/3/
         rm llama-2.zip
