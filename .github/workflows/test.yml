@@ -216,37 +216,6 @@ jobs:
     #     #  /tmp/llama-prism-b9596-9fcaed7/llama-bench -m /tmp/qwen3-4B-IQ4_NL.gguf
     #     #fi
 
-    - name: Benchmark Models (latest) IQ4_XS
-      run: |
-        echo "Benchmarking Quantised Model (Latest):"
-        /tmp/llama-latest/llama-bench -m /tmp/qwen3-4B-IQ4_XS.gguf        
-
-    - name: Benchmark Models (latest) IQ4_XS (-rtr 1)
-      run: |
-        echo "Benchmarking Quantised Model (Latest):"
-        /tmp/llama-latest/llama-bench -rtr 1 -m /tmp/qwen3-4B-IQ4_XS.gguf
-
-    - name: Benchmark Models (latest) IQ4_XS (-rtr 1) (Ver 2.0)
-      run: |
-        echo "Benchmarking Quantised Model (Latest):"
-        /tmp/2/llama-latest/llama-bench -rtr 1 -m /tmp/qwen3-4B-IQ4_XS.gguf
-        
-    - name: Benchmark Models (Prism) IQ4_XS
-      run: |
-        echo "Benchmarking Quantised Model (Prism):"
-        /tmp/llama-prism-b9596-9fcaed7/llama-bench -m /tmp/qwen3-4B-IQ4_XS.gguf
-        rm /tmp/llama-prism-b9596-9fcaed7/libggml-cpu-sapphirerapids.so
-        if grep -q "avx512_bf16" /proc/cpuinfo; then
-          echo Without SPR
-          /tmp/llama-prism-b9596-9fcaed7/llama-bench -m /tmp/qwen3-4B-IQ4_NL.gguf
-        fi
-
-#    - name: Benchmark Models (latest) IQ4_KT
-#      run: |
-#        echo "Benchmarking Quantised Model (Latest):"
-#        /tmp/llama-latest/llama-bench -m /tmp/qwen3-4B-IQ4_KT.gguf
-
-        
     - name: Benchmark Models (latest) IQ4_KS_R4
       run: |
         echo "Benchmarking Quantised Model (Latest):"
@@ -271,6 +240,36 @@ jobs:
 #      run: |
 #        echo "Benchmarking Quantised Model (Latest):"
 #        /tmp/llama-latest/llama-bench -rtr 1 -m /tmp/qwen3-4B-IQ4_KS_R16.gguf
+
+    - name: Benchmark Models (latest) IQ4_XS
+      run: |
+        echo "Benchmarking Quantised Model (Latest):"
+        /tmp/llama-latest/llama-bench -m /tmp/qwen3-4B-IQ4_XS.gguf        
+
+    - name: Benchmark Models (latest) IQ4_XS (-rtr 1)
+      run: |
+        echo "Benchmarking Quantised Model (Latest):"
+        /tmp/llama-latest/llama-bench -rtr 1 -m /tmp/qwen3-4B-IQ4_XS.gguf
+
+    - name: Benchmark Models (latest) IQ4_XS (-rtr 1) (Ver 2.0)
+      run: |
+        echo "Benchmarking Quantised Model (Latest):"
+        /tmp/2/llama-latest/llama-bench -rtr 1 -m /tmp/qwen3-4B-IQ4_XS.gguf
+        
+    - name: Benchmark Models (Prism) IQ4_XS
+      run: |
+        echo "Benchmarking Quantised Model (Prism):"
+        /tmp/llama-prism-b9596-9fcaed7/llama-bench -m /tmp/qwen3-4B-IQ4_XS.gguf
+        rm /tmp/llama-prism-b9596-9fcaed7/libggml-cpu-sapphirerapids.so
+        if grep -q "avx512_bf16" /proc/cpuinfo; then
+          echo Without SPR
+          /tmp/llama-prism-b9596-9fcaed7/llama-bench -m /tmp/qwen3-4B-IQ4_XS.gguf
+        fi
+
+#    - name: Benchmark Models (latest) IQ4_KT
+#      run: |
+#        echo "Benchmarking Quantised Model (Latest):"
+#        /tmp/llama-latest/llama-bench -m /tmp/qwen3-4B-IQ4_KT.gguf
         
 #    - name: Benchmark Models (Prism) Q4_K
 #      run: |
