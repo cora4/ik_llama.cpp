@@ -67,7 +67,6 @@ jobs:
         unzip -o llama-latest-bin-ubuntu-zen3.zip -d /tmp/
         tar --no-overwrite-dir -xf llama-prism-b9596-9fcaed7-bin-ubuntu-x64.tar.gz -C /tmp/ || true
         # rm /tmp/llama-prism-b9596-9fcaed7/libggml-cpu-sapphirerapids.so
-        rm /tmp/llama-prism-b9596-9fcaed7/libggml-cpu-zen4.so
         rm /tmp/llama-prism-b9596-9fcaed7/libggml-cpu-alderlake.so
         rm /tmp/llama-prism-b9596-9fcaed7/libggml-cpu-cooperlake.so
         
@@ -260,6 +259,7 @@ jobs:
       run: |
         echo "Benchmarking Quantised Model (Prism):"
         /tmp/llama-prism-b9596-9fcaed7/llama-bench -m /tmp/qwen3-4B-IQ4_XS.gguf
+        rm /tmp/llama-prism-b9596-9fcaed7/libggml-cpu-zen4.so
         rm /tmp/llama-prism-b9596-9fcaed7/libggml-cpu-sapphirerapids.so
         if grep -q "avx512_bf16" /proc/cpuinfo; then
           echo Without SPR
