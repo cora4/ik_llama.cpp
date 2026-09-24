@@ -14,6 +14,7 @@
 #include <cstring>
 #include <type_traits>
 #include <vector>
+#include <new>
 #include <algorithm>
 
 #include "ggml-impl.h"
@@ -258,10 +259,15 @@ struct MulMat {
             case GGML_TYPE_IQ1_S  : return nrc_y >= 32 ? q8_k_type : type;
             case GGML_TYPE_IQ1_M  : return nrc_y >= 32 ? q8_k_type : type;
             case GGML_TYPE_Q2_K   : return nrc_y >= 32 ? q8_k_type : type;
+            case GGML_TYPE_Q2_K_R4: return nrc_y >= 32 ? q8_k_type : type;
             case GGML_TYPE_Q3_K   : return nrc_y >= 32 ? q8_k_type : type;
+            case GGML_TYPE_Q3_K_R4: return nrc_y >= 32 ? q8_k_type : type;
             case GGML_TYPE_Q4_K   : return nrc_y >= 32 ? GGML_TYPE_Q8_1    : type;
+            case GGML_TYPE_Q4_K_R4: return nrc_y >= 32 ? q8_k_type : type;
             case GGML_TYPE_Q5_K   : return nrc_y >= 32 ? GGML_TYPE_Q8_1    : type;
+            case GGML_TYPE_Q5_K_R4: return nrc_y >= 32 ? q8_k_type : type;
             case GGML_TYPE_Q6_K   : return nrc_y >= 64 ? GGML_TYPE_Q8_0_R8 : type;
+            case GGML_TYPE_Q6_K_R4: return nrc_y >= 32 ? q8_k_type : type;
             case GGML_TYPE_IQ2_KS : return nrc_y >= 32 ? q8_k_type : type;
             case GGML_TYPE_IQ2_K  : return nrc_y >= 32 ? q8_k_type : type;
             case GGML_TYPE_IQ2_K_R4: return nrc_y >= 32 ? q8_k_type : type;
@@ -422,8 +428,22 @@ struct MulMat {
     }
 };
 
-static std::vector<char> & thread_local_work_buffer() {
-    thread_local std::vector<char> f;
+template <class T>
+struct CacheLineAllocator {
+    using value_type = T;
+    static constexpr std::align_val_t align{GGML_Q8_K_R16_ALIGN};
+    CacheLineAllocator() = default;
+    template <class U> CacheLineAllocator(const CacheLineAllocator<U>&) noexcept {}
+    T *  allocate  (size_t n)               { return static_cast<T *>(::operator new(n*sizeof(T), align)); }
+    void deallocate(T * p, size_t) noexcept { ::operator delete(p, align); }
+    template <class U> bool operator==(const CacheLineAllocator<U>&) const noexcept { return true; }
+    template <class U> bool operator!=(const CacheLineAllocator<U>&) const noexcept { return false; }
+};
+
+using work_buffer_t = std::vector<char, CacheLineAllocator<char>>;
+
+static work_buffer_t & thread_local_work_buffer() {
+    thread_local work_buffer_t f;
     return f;
 }
 
@@ -441,11 +461,11 @@ bool iqk_convert_repack(int typeA, int n, const void * vx, size_t bx, void * vy,
         case GGML_TYPE_Q5_K:
         case GGML_TYPE_Q6_K:
         case GGML_TYPE_IQ4_XS:
-        //case GGML_TYPE_Q2_K_R4:
-        //case GGML_TYPE_Q3_K_R4:
-        //case GGML_TYPE_Q4_K_R4:
-        //case GGML_TYPE_Q5_K_R4:
-        //case GGML_TYPE_Q6_K_R4:
+        case GGML_TYPE_Q2_K_R4:
+        case GGML_TYPE_Q3_K_R4:
+        case GGML_TYPE_Q4_K_R4:
+        case GGML_TYPE_Q5_K_R4:
+        case GGML_TYPE_Q6_K_R4:
         case GGML_TYPE_IQ4_XS_R8:
         //case GGML_TYPE_Q8_K_R8:
         //case GGML_TYPE_Q8_KV:

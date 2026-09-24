@@ -1939,6 +1939,10 @@ bool gpt_params_find_arg(int argc, char ** argv, const std::string & arg, gpt_pa
         params.fused_idx_topk = true;
         return true;
     }
+    if (arg == "-no-fidx" || arg == "--no-fused-indexer-topk") {
+        params.fused_idx_topk = false;
+        return true;
+    }
     if (arg == "--swa-compress") {
         params.swa_compress = true;
         return true;
@@ -2851,6 +2855,16 @@ bool gpt_params_find_arg(int argc, char ** argv, const std::string & arg, gpt_pa
         params.ctx_checkpoints_tolerance = std::stoi(argv[i]);
         return true;
     }
+    if (arg == "--ctx-ckpt-spill-dir" || arg == "--ctx-checkpoints-spill-dir") {
+        CHECK_ARG
+        params.ctx_checkpoint_spill_dir = argv[i];
+        return true;
+    }
+    if (arg == "--ctx-ckpt-live-n" || arg == "--ctx-checkpoints-live-n") {
+        CHECK_ARG
+        params.ctx_checkpoint_ram_live = std::stoi(argv[i]);
+        return true;
+    }
     if (arg == "-ctx-ckpt-e" || arg == "--ctx-checkpoints-eviction") {
         CHECK_ARG
         params.ctx_checkpoint_eviction= common_checkpoint_eviction_from_name(std::string(argv[i]));
@@ -3065,6 +3079,8 @@ void gpt_params_print_usage(int /*argc*/, char ** argv, const gpt_params & param
     options.push_back({ "*",           "-cd,   --ctx-size-draft N",     "size of the prompt context for the draft model (default: %d, 0 = inherits target context for DFlash/DSpark, otherwise loaded from model)", params.speculative.n_ctx });
 
     options.push_back({ "*",           "-ctx-ckpt N, --ctx-checkpoints N",           "max number of context checkpoints to create per slot (default: %d)",params.ctx_checkpoints_n});
+    options.push_back({ "*",           "--ctx-ckpt-spill-dir DIR, --ctx-checkpoints-spill-dir DIR",           "spill evicted checkpoints to DIR (NVMe) instead of dropping them; empty disables"});
+    options.push_back({ "*",           "--ctx-ckpt-live-n N, --ctx-checkpoints-live-n N",           "max checkpoints with resident data when spill is on (default: %d)",params.ctx_checkpoint_ram_live});
     options.push_back({ "*",           "-ctx-ckpt-i N, --ctx-checkpoints-interval N",  "minimum number of tokens between each context checkpoint.  (default: %d, <=0 disable)",params.ctx_checkpoints_interval});
     options.push_back({ "*",           "-ctx-ckpt-t N, --ctx-checkpoints-tolerance N", "the number of tokens before the full prompt to create the checkpoint.  (default: %d, <=0 disable)",params.ctx_checkpoints_tolerance});
     options.push_back({ "*",           "-ctx-ckpt-e NAME, --ctx-checkpoints-eviction NAME", "Eviction strategy for checkpoint. Accepts fifo, variance and auto. Auto defaults to variance. Variance preserves coverage and maintains uniform interval.  (default: variance)" });
@@ -3081,6 +3097,7 @@ void gpt_params_print_usage(int /*argc*/, char ** argv, const gpt_params & param
     options.push_back({ "*",           "-mla,  --mla-use",              "enable MLA (default: %d)", params.mla_attn });
     options.push_back({ "*",           "-dsa,  --dsa",                  "enable GLM DSA sparse attention (GLM-DSA arch only; default: %s)", params.dsa ? "enabled" : "disabled" });
     options.push_back({ "*",           "-fidx,  --fused-indexer-topk",  "enable the fused indexer topk op (DSA only; default: %s)", params.fused_idx_topk ? "enabled" : "disabled" });
+    options.push_back({ "*",           "-no-fidx, --no-fused-indexer-topk", "disable the fused indexer topk op (DSA only; default: %s)", params.fused_idx_topk ? "enabled" : "disabled" });
     options.push_back({ "*",           "        --swa-compress",         "allocate sliding-window layers at window size instead of n_ctx (default: %s)", params.swa_compress ? "enabled" : "disabled" });
     options.push_back({ "*",           "-dsatk, --dsa-top-k",           "DSA top-k override; <0 uses the model's configured indexer_top_k (default: %d)", params.dsa_top_k });
     options.push_back({ "*",           "-amb,  --attention-max-batch",  "max batch size for attention computations (default: %d)", params.attn_max_batch});

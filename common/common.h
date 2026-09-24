@@ -430,7 +430,7 @@ struct gpt_params {
     bool rope_cache        = false; // if to use RoPE cache (for supported models)
     bool graph_reuse       = true;  // if to reuse compute graphs
     bool dsa               = false; // enable GLM DSA sparse attention (off by default; opt-in via --dsa)
-    bool fused_idx_topk    = true;  // enable the fused indexer topk op (off by default; opt-in via -fidx or --fused-indexer-topk)
+    bool fused_idx_topk    = true;  // enable the fused indexer topk op (on by default; -no-fidx or --no-fused-indexer-topk turns it off)
     bool swa_compress      = false;
     int  dsa_top_k         = -1;    // DSA top-k override (<0 => use the model's configured indexer_top_k)
     int  min_experts       = -1;
@@ -555,6 +555,8 @@ struct gpt_params {
 
     bool do_checkpoint = false;               // do checkpoint for recurrent models only
     int32_t ctx_checkpoints_n = 32;           // max number of context checkpoints per slot
+    std::string ctx_checkpoint_spill_dir = ""; // disk dir for checkpoint spill (empty = disabled, behavior unchanged)
+    int32_t ctx_checkpoint_ram_live = 2;      // max checkpoints with resident data when spill is on
     int32_t ctx_checkpoints_interval = 512;   // minimum number of tokens between each context checkpoints
     int32_t ctx_checkpoints_tolerance = 5;    // the number of tokens before the full prompt to create the checkpoint
     common_checkpoint_eviction ctx_checkpoint_eviction = COMMON_CHECKPOINT_EVICTION_VARIANCE;

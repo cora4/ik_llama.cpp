@@ -937,6 +937,7 @@ extern "C" {
 
     // TODO: remove the following from the public API to avoid unnecessary assumptions about data layout
     GGML_API GGML_CALL int64_t ggml_blck_size(enum ggml_type type);
+    GGML_API GGML_CALL int64_t ggml_row_blck_size(enum ggml_type type);
     GGML_API GGML_CALL size_t  ggml_type_size(enum ggml_type type);             // size in bytes for all elements in a block
     GGML_API GGML_CALL size_t  ggml_row_size (enum ggml_type type, int64_t ne); // size in bytes for all elements in a row
 
@@ -1574,6 +1575,17 @@ extern "C" {
             struct ggml_tensor  * a,
             struct ggml_tensor  * b,
             float                 eps);
+
+    // a must be contiguous. b must have one row and b->ne[0] must be eqal a->ne[0]
+    // a and b must be contiguous
+    // b must be GGML_TYPE_F32
+    // a must be GGML_TYPE_F32 || GGML_TYPE_F16 || GGML_TYPE_BF16 || GGML_TYPE_Q8_0
+    GGML_API struct ggml_tensor * ggml_fused_grouped_rms_norm(
+            struct ggml_context * ctx,
+            struct ggml_tensor  * a,
+            struct ggml_tensor  * b,
+            float                 eps,
+            int                   ngroups);
 
     GGML_API struct ggml_tensor * ggml_fused_norm(
             struct ggml_context * ctx,
